@@ -19,7 +19,8 @@ import {
   subscribeToVotes,
   subscribeToNotifications,
   subscribeToProfiles,
-  signOut
+  signOut,
+  initializeQuestions
 } from '@/lib/supabase';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -44,6 +45,7 @@ const Index = () => {
   const [memberCount, setMemberCount] = useState(0);
   const [unreadVotes, setUnreadVotes] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [questionLoading, setQuestionLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -68,6 +70,9 @@ const Index = () => {
     if (user) {
       loadData();
       setupSubscriptions();
+    } else {
+      // 로그인하지 않은 상태에서도 질문은 로드
+      loadQuestionData();
     }
   }, [user]);
 
@@ -76,6 +81,9 @@ const Index = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         await loadUserProfile();
+      } else {
+        // 로그인하지 않은 상태에서도 질문 로드
+        await loadQuestionData();
       }
     } catch (error) {
       console.error('Auth check error:', error);
@@ -95,19 +103,43 @@ const Index = () => {
     }
   };
 
-  const loadData = async () => {
+  const loadQuestionData = async () => {
+    setQuestionLoading(true);
     try {
+      console.log('Loading question data...');
+      
+      // 먼저 질문 초기화 시도
+      await initializeQuestions();
+      
       // 활성 질문 가져오기
       const question = await getActiveQuestion();
+      console.log('Active question loaded:', question);
       setCurrentQuestion(question);
-
-      // 오늘 투표 여부 확인
-      const voted = await hasVotedToday();
-      setHasVoted(voted);
 
       // 멤버 수 가져오기
       const profiles = await getAllProfiles();
       setMemberCount(profiles.length);
+
+    } catch (error) {
+      console.error('Question data load error:', error);
+      toast({
+        title: "질문 로딩 오류",
+        description: "질문을 불러오는데 실패했습니다. 잠시 후 다시 시도해주세요.",
+        variant: "destructive"
+      });
+    } finally {
+      setQuestionLoading(false);
+    }
+  };
+
+  const loadData = async () => {
+    try {
+      // 질문 데이터 로드
+      await loadQuestionData();
+
+      // 오늘 투표 여부 확인
+      const voted = await hasVotedToday();
+      setHasVoted(voted);
 
       // 읽지 않은 알림 수 가져오기
       const unreadCount = await getUnreadNotificationCount();
@@ -181,6 +213,14 @@ const Index = () => {
     } catch (error) {
       console.error('Logout error:', error);
     }
+  };
+
+  const handleRefreshQuestion = async () => {
+    await loadQuestionData();
+    toast({
+      title: "새로고침 완료",
+      description: "질문을 다시 불러왔습니다.",
+    });
   };
 
   if (loading) {
@@ -294,9 +334,26 @@ const Index = () => {
               <div className="w-16 h-16 bg-white/20 rounded-full mx-auto flex items-center justify-center">
                 <span className="text-2xl">🤔</span>
               </div>
-              <p className="text-white font-medium text-lg leading-relaxed">
-                {currentQuestion?.content || "질문을 불러오는 중..."}
-              </p>
+              
+              {questionLoading ? (
+                <p className="text-white/80 text-lg">질문을 불러오는 중...</p>
+              ) : currentQuestion ? (
+                <p className="text-white font-medium text-lg leading-relaxed">
+                  {currentQuestion.content}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-white/80 text-lg">질문을 불러올 수 없습니다</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefreshQuestion}
+                    className="bg-white/20 border-white/30 text-white hover:bg-white/30"
+                  >
+                    다시 시도
+                  </Button>
+                </div>
+              )}
             </div>
             
             {hasVoted ? (
@@ -309,7 +366,7 @@ const Index = () => {
                 onClick={handleVote}
                 className="w-full bg-white text-purple-600 hover:bg-white/90 font-bold py-3 rounded-2xl"
                 size="lg"
-                disabled={!currentQuestion}
+                disabled={!currentQuestion || questionLoading}
               >
                 <Vote className="h-4 w-4 mr-2" />
                 투표하기
@@ -358,7 +415,9 @@ const Index = () => {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600">현재 질문</span>
-              <Badge variant="outline">활성</Badge>
+              <Badge variant="outline">
+                {currentQuestion ? '활성' : '로딩중'}
+              </Badge>
             </div>
           </CardContent>
         </Card>

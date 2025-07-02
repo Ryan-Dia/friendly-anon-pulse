@@ -61,7 +61,10 @@ export const getProfile = async (): Promise<User | null> => {
     .eq('user_id', user.id)
     .single();
 
-  if (error) return null;
+  if (error) {
+    console.error('Profile fetch error:', error);
+    return null;
+  }
 
   return {
     id: data.id,
@@ -79,7 +82,10 @@ export const getAllProfiles = async (): Promise<User[]> => {
     .eq('affiliation', '우아한테크코스')
     .order('created_at', { ascending: true });
 
-  if (error) throw error;
+  if (error) {
+    console.error('Profiles fetch error:', error);
+    throw error;
+  }
 
   return data.map(profile => ({
     id: profile.id,
@@ -92,24 +98,76 @@ export const getAllProfiles = async (): Promise<User[]> => {
 
 // 질문 관련 함수들
 export const getQuestions = async () => {
+  console.log('Fetching all questions...');
   const { data, error } = await supabase
     .from('questions')
     .select('*')
     .order('order_index', { ascending: true });
 
-  if (error) throw error;
+  if (error) {
+    console.error('Questions fetch error:', error);
+    throw error;
+  }
+  
+  console.log('Questions fetched:', data);
   return data;
 };
 
 export const getActiveQuestion = async () => {
-  const { data, error } = await supabase
+  console.log('Fetching active question...');
+  
+  // 먼저 활성 질문이 있는지 확인
+  const { data: activeData, error: activeError } = await supabase
     .from('questions')
     .select('*')
     .eq('is_active', true)
+    .maybeSingle();
+
+  if (activeError) {
+    console.error('Active question fetch error:', activeError);
+    throw activeError;
+  }
+
+  // 활성 질문이 있으면 반환
+  if (activeData) {
+    console.log('Active question found:', activeData);
+    return activeData;
+  }
+
+  // 활성 질문이 없으면 첫 번째 질문을 활성화
+  console.log('No active question found, activating first question...');
+  
+  const { data: firstQuestion, error: firstError } = await supabase
+    .from('questions')
+    .select('*')
+    .order('order_index', { ascending: true })
+    .limit(1)
     .single();
 
-  if (error) throw error;
-  return data;
+  if (firstError) {
+    console.error('First question fetch error:', firstError);
+    throw firstError;
+  }
+
+  if (firstQuestion) {
+    // 첫 번째 질문을 활성화
+    const { data: updatedQuestion, error: updateError } = await supabase
+      .from('questions')
+      .update({ is_active: true })
+      .eq('id', firstQuestion.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('Question activation error:', updateError);
+      throw updateError;
+    }
+
+    console.log('First question activated:', updatedQuestion);
+    return updatedQuestion;
+  }
+
+  throw new Error('No questions found in database');
 };
 
 export const updateQuestion = async (id: string, content: string) => {
@@ -141,6 +199,62 @@ export const setActiveQuestion = async (id: string) => {
 
   if (error) throw error;
   return data;
+};
+
+// 기본 질문들을 데이터베이스에 삽입하는 함수
+export const initializeQuestions = async () => {
+  console.log('Initializing questions...');
+  
+  const defaultQuestions = [
+    { content: '오늘 가장 함께 점심을 먹고 싶은 사람은?', order_index: 0 },
+    { content: '세상에서 제일 웃긴 것 같은 사람은?', order_index: 1 },
+    { content: '힘든 일이 있을 때 기대고 싶은 사람은?', order_index: 2 },
+    { content: '가장 센스가 좋다고 생각하는 사람은?', order_index: 3 },
+    { content: '같이 여행을 가고 싶은 사람은?', order_index: 4 },
+    { content: '가장 열정적이라고 생각하는 사람은?', order_index: 5 },
+    { content: '함께 프로젝트를 하고 싶은 사람은?', order_index: 6 }
+  ];
+
+  try {
+    // 기존 질문이 있는지 확인
+    const { data: existingQuestions } = await supabase
+      .from('questions')
+      .select('id')
+      .limit(1);
+
+    if (existingQuestions && existingQuestions.length > 0) {
+      console.log('Questions already exist, skipping initialization');
+      return;
+    }
+
+    // 질문들 삽입
+    const { data, error } = await supabase
+      .from('questions')
+      .insert(defaultQuestions)
+      .select();
+
+    if (error) {
+      console.error('Question initialization error:', error);
+      throw error;
+    }
+
+    console.log('Questions initialized:', data);
+
+    // 첫 번째 질문을 활성화
+    if (data && data.length > 0) {
+      await supabase
+        .from('questions')
+        .update({ is_active: true })
+        .eq('id', data[0].id);
+      
+      console.log('First question activated');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Failed to initialize questions:', error);
+    throw error;
+  }
 };
 
 // 투표 관련 함수들
@@ -211,7 +325,11 @@ export const hasVotedToday = async (): Promise<boolean> => {
     .eq('vote_date', today)
     .limit(1);
 
-  if (error) return false;
+  if (error) {
+    console.error('Vote check error:', error);
+    return false;
+  }
+  
   return data.length > 0;
 };
 
@@ -286,7 +404,10 @@ export const getUnreadNotificationCount = async (): Promise<number> => {
     .eq('recipient_id', profile.id)
     .eq('is_read', false);
 
-  if (error) return 0;
+  if (error) {
+    console.error('Unread notification count error:', error);
+    return 0;
+  }
   return count || 0;
 };
 
