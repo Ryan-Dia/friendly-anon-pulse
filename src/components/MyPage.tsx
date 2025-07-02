@@ -19,6 +19,7 @@ interface VoteReceived {
   timestamp: string;
   date: string;
   read: boolean;
+  count?: number;
 }
 
 interface MyPageProps {
@@ -199,7 +200,7 @@ const MyPage = ({ isOpen, onClose, user }: MyPageProps) => {
                               <span className="text-xs text-gray-500">
                                 {formatDate(vote.timestamp)}
                               </span>
-                              {vote.count > 1 && (
+                              {vote.count && vote.count > 1 && (
                                 <Badge variant="secondary" className="text-xs">
                                   {vote.count}명이 선택
                                 </Badge>

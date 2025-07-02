@@ -3,12 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Vote, Heart, MessageCircle, Settings, User } from "lucide-react";
+import { Users, Vote, Heart, MessageCircle, Settings, User, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import LoginModal from "@/components/LoginModal";
 import VoteModal from "@/components/VoteModal";
 import AdminModal from "@/components/AdminModal";
 import MyPage from "@/components/MyPage";
+import ParticipantsModal from "@/components/ParticipantsModal";
+import BoardModal from "@/components/BoardModal";
 
 interface User {
   id: string;
@@ -24,6 +26,8 @@ const Index = () => {
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showMyPage, setShowMyPage] = useState(false);
+  const [showParticipantsModal, setShowParticipantsModal] = useState(false);
+  const [showBoardModal, setShowBoardModal] = useState(false);
   const [todayQuestions, setTodayQuestions] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [hasVotedToday, setHasVotedToday] = useState(false);
@@ -79,7 +83,9 @@ const Index = () => {
       "세상에서 제일 웃긴 것 같은 사람은?",
       "힘든 일이 있을 때 기대고 싶은 사람은?",
       "가장 센스가 좋다고 생각하는 사람은?",
-      "같이 여행을 가고 싶은 사람은?"
+      "같이 여행을 가고 싶은 사람은?",
+      "가장 열정적이라고 생각하는 사람은?",
+      "함께 프로젝트를 하고 싶은 사람은?"
     ];
     
     const savedQuestions = localStorage.getItem('todayQuestions');
@@ -230,7 +236,7 @@ const Index = () => {
         {/* Welcome Section */}
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-bold text-gray-900">
-            우아한테크코스와 함께
+            익명 투표 플랫폼
           </h2>
           <p className="text-gray-600">
             익명으로 소통하고 서로를 알아가는 공간
@@ -302,19 +308,25 @@ const Index = () => {
 
         {/* Features Grid */}
         <div className="grid grid-cols-2 gap-4">
-          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+          <Card 
+            className="hover:shadow-md transition-shadow cursor-pointer"
+            onClick={() => setShowParticipantsModal(true)}
+          >
             <CardContent className="p-6 text-center space-y-2">
-              <MessageCircle className="h-8 w-8 mx-auto text-blue-500" />
-              <h3 className="font-semibold text-gray-900">익명 질문</h3>
-              <p className="text-sm text-gray-600">서로에게 궁금한 것을 물어보세요</p>
+              <Users className="h-8 w-8 mx-auto text-blue-500" />
+              <h3 className="font-semibold text-gray-900">참여자 목록</h3>
+              <p className="text-sm text-gray-600">함께하는 크루들을 확인해보세요</p>
             </CardContent>
           </Card>
           
-          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+          <Card 
+            className="hover:shadow-md transition-shadow cursor-pointer"
+            onClick={() => setShowBoardModal(true)}
+          >
             <CardContent className="p-6 text-center space-y-2">
-              <Heart className="h-8 w-8 mx-auto text-pink-500" />
-              <h3 className="font-semibold text-gray-900">소통하기</h3>
-              <p className="text-sm text-gray-600">익명으로 답변하고 소통해요</p>
+              <MessageSquare className="h-8 w-8 mx-auto text-green-500" />
+              <h3 className="font-semibold text-gray-900">게시판</h3>
+              <p className="text-sm text-gray-600">질문 아이디어와 개선사항 공유</p>
             </CardContent>
           </Card>
         </div>
@@ -333,8 +345,8 @@ const Index = () => {
               <Badge variant="secondary">진행중</Badge>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">익명 질문</span>
-              <Badge variant="outline">곧 출시</Badge>
+              <span className="text-gray-600">총 질문 수</span>
+              <Badge variant="outline">{todayQuestions.length}개</Badge>
             </div>
           </CardContent>
         </Card>
@@ -391,6 +403,17 @@ const Index = () => {
       <MyPage
         isOpen={showMyPage}
         onClose={() => setShowMyPage(false)}
+        user={user}
+      />
+
+      <ParticipantsModal
+        isOpen={showParticipantsModal}
+        onClose={() => setShowParticipantsModal(false)}
+      />
+
+      <BoardModal
+        isOpen={showBoardModal}
+        onClose={() => setShowBoardModal(false)}
         user={user}
       />
     </div>
