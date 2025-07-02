@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, User, Building, CheckCircle } from "lucide-react";
-import { signIn, signUp, getProfile, handleEmailConfirmation } from '@/lib/supabase';
+import { Mail, Lock, User, Building, CheckCircle, AlertCircle } from "lucide-react";
+import { signIn, signUp, getProfile, checkAndCreateProfile } from '@/lib/supabase';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -23,8 +23,8 @@ const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
     affiliation: '우아한테크코스'
   });
   const [loading, setLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
-  const [checkingConfirmation, setCheckingConfirmation] = useState(false);
+  const [signupStep, setSignupStep] = useState<'form' | 'email-sent' | 'checking'>('form');
+  const [signupResult, setSignupResult] = useState<any>(null);
   const { toast } = useToast();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,10 +39,14 @@ const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
     setLoading(true);
 
     try {
+      console.log('Attempting login for:', formData.email);
       await signIn(formData.email, formData.password);
+      
+      // 로그인 후 프로필 확인
       const profile = await getProfile();
       
       if (profile) {
+        console.log('Login successful, profile found:', profile.nickname);
         onLogin(profile);
         onClose();
         resetForm();
@@ -51,17 +55,34 @@ const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
           description: `안녕하세요, ${profile.nickname}님!`,
         });
       } else {
-        toast({
-          title: "프로필 로딩 실패",
-          description: "프로필을 불러올 수 없습니다. 다시 시도해주세요.",
-          variant: "destructive"
-        });
+        console.log('Login successful but no profile found, creating...');
+        // 프로필이 없으면 생성 시도
+        const newProfile = await checkAndCreateProfile();
+        if (newProfile) {
+          onLogin(newProfile);
+          onClose();
+          resetForm();
+          toast({
+            title: "로그인 성공!",
+            description: `안녕하세요, ${newProfile.nickname}님!`,
+          });
+        } else {
+          throw new Error('프로필을 생성할 수 없습니다.');
+        }
       }
     } catch (error: any) {
       console.error('Login error:', error);
+      let errorMessage = "로그인에 실패했습니다.";
+      
+      if (error.message?.includes('Invalid login credentials')) {
+        errorMessage = "이메일 또는 비밀번호가 올바르지 않습니다.";
+      } else if (error.message?.includes('Email not confirmed')) {
+        errorMessage = "이메일 확인이 필요합니다. 이메일을 확인해주세요.";
+      }
+      
       toast({
         title: "로그인 실패",
-        description: error.message || "이메일 또는 비밀번호가 올바르지 않습니다.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -92,23 +113,53 @@ const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
         return;
       }
 
+      console.log('Starting signup for:', formData.email);
       const result = await signUp(formData.email, formData.password, formData.nickname);
+      setSignupResult(result);
       
+      // 프로필이 즉시 생성된 경우 (이메일 확인 불필요)
+      if (result.profile) {
+        console.log('Signup completed with immediate profile creation');
+        onLogin(result.profile);
+        onClose();
+        resetForm();
+        toast({
+          title: "회원가입 성공!",
+          description: `환영합니다, ${result.profile.nickname}님!`,
+        });
+      } 
       // 이메일 확인이 필요한 경우
-      if (result.user && !result.user.email_confirmed_at) {
-        setEmailSent(true);
+      else if (result.needsEmailConfirmation) {
+        console.log('Email confirmation required');
+        setSignupStep('email-sent');
         toast({
           title: "회원가입 완료!",
           description: "이메일을 확인하여 계정을 활성화해주세요.",
         });
-      } else {
-        // 이메일 확인이 비활성화되어 있거나 이미 확인된 경우
-        toast({
-          title: "회원가입 성공!",
-          description: "로그인 탭에서 로그인해주세요.",
-        });
-        setIsSignUp(false);
-        resetForm();
+      }
+      // 기타 경우 (즉시 로그인 시도)
+      else {
+        console.log('Signup completed, attempting immediate login');
+        try {
+          await signIn(formData.email, formData.password);
+          const profile = await checkAndCreateProfile();
+          if (profile) {
+            onLogin(profile);
+            onClose();
+            resetForm();
+            toast({
+              title: "회원가입 성공!",
+              description: `환영합니다, ${profile.nickname}님!`,
+            });
+          }
+        } catch (loginError) {
+          console.error('Immediate login failed:', loginError);
+          setSignupStep('email-sent');
+          toast({
+            title: "회원가입 완료!",
+            description: "이메일을 확인한 후 로그인해주세요.",
+          });
+        }
       }
       
     } catch (error: any) {
@@ -134,36 +185,46 @@ const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
   };
 
   const handleCheckEmailConfirmation = async () => {
-    setCheckingConfirmation(true);
+    setSignupStep('checking');
     
     try {
-      const profile = await handleEmailConfirmation();
+      console.log('Checking email confirmation and creating profile...');
+      
+      // 먼저 로그인 시도
+      await signIn(formData.email, formData.password);
+      
+      // 프로필 확인 및 생성
+      const profile = await checkAndCreateProfile();
       
       if (profile) {
+        console.log('Email confirmed and profile created:', profile.nickname);
         onLogin(profile);
         onClose();
         resetForm();
-        setEmailSent(false);
         toast({
           title: "이메일 확인 완료!",
           description: `환영합니다, ${profile.nickname}님!`,
         });
       } else {
-        toast({
-          title: "이메일 확인 대기중",
-          description: "아직 이메일 확인이 완료되지 않았습니다. 이메일을 확인해주세요.",
-          variant: "destructive"
-        });
+        throw new Error('프로필 생성에 실패했습니다.');
       }
     } catch (error: any) {
       console.error('Email confirmation check error:', error);
+      
+      let errorMessage = "이메일 확인을 완료해주세요.";
+      if (error.message?.includes('Invalid login credentials')) {
+        errorMessage = "아직 이메일 확인이 완료되지 않았습니다. 이메일을 확인해주세요.";
+      } else if (error.message?.includes('Email not confirmed')) {
+        errorMessage = "이메일 확인이 필요합니다. 이메일의 확인 링크를 클릭해주세요.";
+      }
+      
       toast({
-        title: "확인 실패",
-        description: "이메일 확인 상태를 확인할 수 없습니다. 다시 시도해주세요.",
+        title: "확인 필요",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
-      setCheckingConfirmation(false);
+      setSignupStep('email-sent');
     }
   };
 
@@ -174,7 +235,8 @@ const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
       nickname: '',
       affiliation: '우아한테크코스'
     });
-    setEmailSent(false);
+    setSignupStep('form');
+    setSignupResult(null);
   };
 
   const handleModalClose = () => {
@@ -191,10 +253,10 @@ const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
           </DialogTitle>
         </DialogHeader>
         
-        {emailSent ? (
+        {signupStep === 'email-sent' ? (
           <div className="space-y-4 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-              <Mail className="h-8 w-8 text-green-600" />
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
+              <Mail className="h-8 w-8 text-blue-600" />
             </div>
             <div className="space-y-2">
               <h3 className="text-lg font-semibold">이메일을 확인해주세요</h3>
@@ -208,10 +270,10 @@ const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
             <div className="space-y-2">
               <Button 
                 onClick={handleCheckEmailConfirmation}
-                disabled={checkingConfirmation}
+                disabled={signupStep === 'checking'}
                 className="w-full"
               >
-                {checkingConfirmation ? (
+                {signupStep === 'checking' ? (
                   "확인 중..."
                 ) : (
                   <>
@@ -222,11 +284,15 @@ const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
               </Button>
               <Button 
                 variant="outline" 
-                onClick={() => setEmailSent(false)}
+                onClick={() => setSignupStep('form')}
                 className="w-full"
               >
                 다시 시도
               </Button>
+            </div>
+            <div className="text-xs text-gray-500 bg-yellow-50 p-3 rounded-lg">
+              <AlertCircle className="h-4 w-4 inline mr-1" />
+              이메일이 오지 않았다면 스팸함을 확인해주세요.
             </div>
           </div>
         ) : (

@@ -33,6 +33,8 @@ export const createProfile = async (userData: {
   isAdmin?: boolean;
   userId?: string;
 }) => {
+  console.log('Creating profile for:', userData.email);
+  
   // userId가 제공되지 않은 경우 현재 사용자 가져오기
   let userId = userData.userId;
   if (!userId) {
@@ -44,7 +46,7 @@ export const createProfile = async (userData: {
   // 이미 프로필이 존재하는지 확인
   const { data: existingProfile } = await supabase
     .from('profiles')
-    .select('id')
+    .select('*')
     .eq('user_id', userId)
     .single();
 
@@ -53,6 +55,7 @@ export const createProfile = async (userData: {
     return existingProfile;
   }
 
+  console.log('Creating new profile...');
   const { data, error } = await supabase
     .from('profiles')
     .insert({
@@ -472,54 +475,75 @@ export const getBoardPosts = async (type?: 'question' | 'improvement') => {
   return data;
 };
 
-// 인증 관련 함수들
+// 인증 관련 함수들 - 완전히 새로 작성
 export const signUp = async (email: string, password: string, nickname: string) => {
   console.log('Starting signup process for:', email);
   
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: `${window.location.origin}/auth/callback`,
-      data: {
-        nickname: nickname,
-        affiliation: '우아한테크코스'
+  try {
+    // 1. 먼저 Supabase Auth에 사용자 등록
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        // 이메일 확인 비활성화를 위해 emailRedirectTo를 설정하지 않음
+        data: {
+          nickname: nickname,
+          affiliation: '우아한테크코스'
+        }
+      }
+    });
+
+    if (authError) {
+      console.error('Auth signup error:', authError);
+      throw authError;
+    }
+
+    console.log('Auth signup successful:', authData);
+
+    // 2. 사용자가 생성되었으면 즉시 프로필 생성 시도
+    if (authData.user) {
+      console.log('User created, attempting to create profile...');
+      
+      try {
+        // 잠시 대기 후 프로필 생성 (Supabase가 사용자를 완전히 생성할 시간을 줌)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const profile = await createProfile({
+          email,
+          nickname,
+          affiliation: '우아한테크코스',
+          isAdmin: email === 'admin@woowacourse.io',
+          userId: authData.user.id
+        });
+        
+        console.log('Profile created successfully during signup:', profile);
+        
+        // 프로필이 성공적으로 생성되면 즉시 로그인 처리
+        return { 
+          ...authData, 
+          profile,
+          needsEmailConfirmation: false 
+        };
+        
+      } catch (profileError) {
+        console.error('Profile creation failed during signup:', profileError);
+        
+        // 프로필 생성에 실패했지만 사용자는 생성됨
+        // 이메일 확인이 필요할 수 있음을 표시
+        return { 
+          ...authData, 
+          profile: null,
+          needsEmailConfirmation: !authData.user.email_confirmed_at 
+        };
       }
     }
-  });
 
-  if (error) {
-    console.error('Signup error:', error);
+    return authData;
+    
+  } catch (error) {
+    console.error('Signup process failed:', error);
     throw error;
   }
-
-  console.log('Signup response:', data);
-
-  // 사용자가 생성되었지만 이메일 확인이 필요한 경우
-  if (data.user && !data.user.email_confirmed_at) {
-    console.log('User created but email confirmation required');
-    return data;
-  }
-
-  // 이메일 확인이 비활성화되어 있거나 이미 확인된 경우 프로필 생성
-  if (data.user && data.user.email_confirmed_at) {
-    console.log('User confirmed, creating profile...');
-    try {
-      await createProfile({
-        email,
-        nickname,
-        affiliation: '우아한테크코스',
-        isAdmin: email === 'admin@woowacourse.io',
-        userId: data.user.id
-      });
-      console.log('Profile created successfully during signup');
-    } catch (profileError) {
-      console.error('Profile creation failed during signup:', profileError);
-      // 프로필 생성 실패해도 회원가입은 성공으로 처리
-    }
-  }
-
-  return data;
 };
 
 export const signIn = async (email: string, password: string) => {
@@ -542,7 +566,7 @@ export const signIn = async (email: string, password: string) => {
     try {
       const existingProfile = await getProfile();
       if (!existingProfile) {
-        console.log('No profile found, creating one...');
+        console.log('No profile found during signin, creating one...');
         await createProfile({
           email: data.user.email || email,
           nickname: data.user.user_metadata?.nickname || email.split('@')[0],
@@ -566,19 +590,27 @@ export const signOut = async () => {
 };
 
 // 이메일 확인 후 프로필 생성을 위한 함수
-export const handleEmailConfirmation = async () => {
+export const checkAndCreateProfile = async () => {
+  console.log('Checking and creating profile if needed...');
+  
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) {
+    console.log('No authenticated user found');
+    return null;
+  }
+
+  console.log('User found:', user.email, 'Email confirmed:', !!user.email_confirmed_at);
 
   // 프로필이 이미 있는지 확인
   const existingProfile = await getProfile();
   if (existingProfile) {
-    console.log('Profile already exists');
+    console.log('Profile already exists:', existingProfile.nickname);
     return existingProfile;
   }
 
-  // 프로필 생성
+  // 프로필이 없으면 생성
   try {
+    console.log('Creating profile for authenticated user...');
     const nickname = user.user_metadata?.nickname || user.email?.split('@')[0] || 'User';
     const profile = await createProfile({
       email: user.email || '',
@@ -587,10 +619,10 @@ export const handleEmailConfirmation = async () => {
       isAdmin: user.email === 'admin@woowacourse.io',
       userId: user.id
     });
-    console.log('Profile created after email confirmation');
+    console.log('Profile created successfully:', profile);
     return profile;
   } catch (error) {
-    console.error('Failed to create profile after email confirmation:', error);
+    console.error('Failed to create profile:', error);
     throw error;
   }
 };

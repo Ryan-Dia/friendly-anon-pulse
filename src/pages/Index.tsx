@@ -21,7 +21,7 @@ import {
   subscribeToProfiles,
   signOut,
   initializeQuestions,
-  handleEmailConfirmation
+  checkAndCreateProfile
 } from '@/lib/supabase';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -58,13 +58,15 @@ const Index = () => {
       console.log('Auth state changed:', event, session?.user?.email);
       
       if (event === 'SIGNED_IN' && session) {
+        console.log('User signed in, loading profile...');
         await loadUserProfile();
       } else if (event === 'SIGNED_OUT') {
+        console.log('User signed out');
         setUser(null);
         setHasVoted(false);
         setUnreadVotes(0);
       } else if (event === 'TOKEN_REFRESHED' && session) {
-        // 토큰이 새로고침되면 프로필 다시 로드
+        console.log('Token refreshed, reloading profile...');
         await loadUserProfile();
       }
     });
@@ -84,23 +86,18 @@ const Index = () => {
 
   const checkAuthState = async () => {
     try {
+      console.log('Checking auth state...');
       const { data: { session } } = await supabase.auth.getSession();
       console.log('Current session:', session?.user?.email);
       
       if (session?.user) {
-        // 이메일이 확인되었는지 체크
-        if (session.user.email_confirmed_at) {
-          const profile = await loadUserProfile();
-          if (profile) {
-            await loadQuestionData();
-          }
-        } else {
-          console.log('Email not confirmed yet');
-          // 이메일 확인이 안된 경우에도 질문은 로드
+        console.log('Session found, loading user profile...');
+        const profile = await loadUserProfile();
+        if (profile) {
           await loadQuestionData();
         }
       } else {
-        // 로그인하지 않은 상태에서도 질문 로드
+        console.log('No session found, loading questions only...');
         await loadQuestionData();
       }
     } catch (error) {
@@ -118,7 +115,7 @@ const Index = () => {
   const loadUserProfile = async () => {
     try {
       console.log('Loading user profile...');
-      const profile = await getProfile();
+      let profile = await getProfile();
       
       if (profile) {
         console.log('Profile loaded:', profile.nickname);
@@ -126,9 +123,9 @@ const Index = () => {
         return profile;
       } else {
         console.log('No profile found, attempting to create one...');
-        // 프로필이 없으면 이메일 확인 후 생성 시도
+        // 프로필이 없으면 생성 시도
         try {
-          const newProfile = await handleEmailConfirmation();
+          const newProfile = await checkAndCreateProfile();
           if (newProfile) {
             console.log('Profile created:', newProfile.nickname);
             setUser({
