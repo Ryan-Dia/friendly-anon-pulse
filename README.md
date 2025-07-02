@@ -1,7 +1,7 @@
 
-# with - 우아한테크코스 익명 Q&A SNS
+# with - 
 
-우아한테크코스와 함께하는 익명 소통 플랫폼입니다.
+배포 링크 : https://resonant-paprenjak-a93af0.netlify.app/
 
 ## 🌟 주요 기능
 
