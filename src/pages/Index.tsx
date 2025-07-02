@@ -3,11 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Vote, Heart, MessageCircle, Settings } from "lucide-react";
+import { Users, Vote, Heart, MessageCircle, Settings, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import LoginModal from "@/components/LoginModal";
 import VoteModal from "@/components/VoteModal";
 import AdminModal from "@/components/AdminModal";
+import MyPage from "@/components/MyPage";
 
 interface User {
   id: string;
@@ -22,10 +23,12 @@ const Index = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showMyPage, setShowMyPage] = useState(false);
   const [todayQuestions, setTodayQuestions] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [hasVotedToday, setHasVotedToday] = useState(false);
   const [memberCount, setMemberCount] = useState(0);
+  const [unreadVotes, setUnreadVotes] = useState(0);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -35,6 +38,7 @@ const Index = () => {
       const parsedUser = JSON.parse(savedUser);
       setUser(parsedUser);
       checkTodayVote(parsedUser.id);
+      checkUnreadVotes(parsedUser.id);
     }
     
     // 오늘의 질문들 가져오기
@@ -48,18 +52,26 @@ const Index = () => {
   useEffect(() => {
     const handleStorageChange = () => {
       fetchMemberCount();
+      if (user) {
+        checkUnreadVotes(user.id);
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
     
     // 로컬 스토리지 변경도 감지 (같은 탭에서의 변경)
-    const interval = setInterval(fetchMemberCount, 1000);
+    const interval = setInterval(() => {
+      fetchMemberCount();
+      if (user) {
+        checkUnreadVotes(user.id);
+      }
+    }, 1000);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
     };
-  }, []);
+  }, [user]);
 
   const fetchTodayQuestions = () => {
     const defaultQuestions = [
@@ -99,6 +111,13 @@ const Index = () => {
     }
   };
 
+  const checkUnreadVotes = (userId: string) => {
+    // 읽지 않은 투표 수 확인
+    const allVotes = JSON.parse(localStorage.getItem('votes') || '[]');
+    const myVotes = allVotes.filter((vote: any) => vote.candidateId === userId && !vote.read);
+    setUnreadVotes(myVotes.length);
+  };
+
   const handleVote = () => {
     if (!user) {
       setShowLoginModal(true);
@@ -133,6 +152,7 @@ const Index = () => {
     setUser(newUser);
     // 로그인 후 멤버 수 즉시 업데이트
     fetchMemberCount();
+    checkUnreadVotes(newUser.id);
   };
 
   const isAdmin = user?.email === 'admin@woowacourse.io';
@@ -162,6 +182,22 @@ const Index = () => {
             )}
             {user ? (
               <div className="flex items-center space-x-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMyPage(true)}
+                  className="relative"
+                >
+                  <User className="h-4 w-4" />
+                  {unreadVotes > 0 && (
+                    <Badge 
+                      variant="destructive" 
+                      className="absolute -top-1 -right-1 h-4 w-4 p-0 text-xs flex items-center justify-center"
+                    >
+                      {unreadVotes}
+                    </Badge>
+                  )}
+                </Button>
                 <span className="text-sm text-gray-600">{user.nickname}</span>
                 <Button
                   variant="ghost"
@@ -170,6 +206,7 @@ const Index = () => {
                     localStorage.removeItem('user');
                     setUser(null);
                     setHasVotedToday(false);
+                    setUnreadVotes(0);
                   }}
                 >
                   로그아웃
@@ -350,6 +387,12 @@ const Index = () => {
           onClose={() => setShowAdminModal(false)}
         />
       )}
+
+      <MyPage
+        isOpen={showMyPage}
+        onClose={() => setShowMyPage(false)}
+        user={user}
+      />
     </div>
   );
 };
