@@ -25,7 +25,7 @@ const Index = () => {
   const [todayQuestions, setTodayQuestions] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [hasVotedToday, setHasVotedToday] = useState(false);
-  const [memberCount, setMemberCount] = useState(4);
+  const [memberCount, setMemberCount] = useState(0);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -42,6 +42,23 @@ const Index = () => {
     
     // 멤버 수 가져오기
     fetchMemberCount();
+  }, []);
+
+  // 스토리지 변경을 감지하여 멤버 수 실시간 업데이트
+  useEffect(() => {
+    const handleStorageChange = () => {
+      fetchMemberCount();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // 로컬 스토리지 변경도 감지 (같은 탭에서의 변경)
+    const interval = setInterval(fetchMemberCount, 1000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
   }, []);
 
   const fetchTodayQuestions = () => {
@@ -68,7 +85,9 @@ const Index = () => {
   };
 
   const fetchMemberCount = () => {
-    setMemberCount(4); // 더미 회원 4명으로 설정
+    const savedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+    const woowacourseMembers = savedUsers.filter((user: User) => user.affiliation === '우아한테크코스');
+    setMemberCount(woowacourseMembers.length);
   };
 
   const checkTodayVote = (userId: string) => {
@@ -108,6 +127,12 @@ const Index = () => {
     if (user) {
       localStorage.removeItem(`lastVote_${user.id}`);
     }
+  };
+
+  const handleLoginSuccess = (newUser: User) => {
+    setUser(newUser);
+    // 로그인 후 멤버 수 즉시 업데이트
+    fetchMemberCount();
   };
 
   const isAdmin = user?.email === 'admin@woowacourse.io';
@@ -179,7 +204,7 @@ const Index = () => {
           </Badge>
         </div>
 
-        {/* Today's Question Card - 이미지 스타일 참고하여 개선 */}
+        {/* Today's Question Card */}
         <Card className="shadow-lg border-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white relative overflow-hidden">
           <div className="absolute top-4 right-4">
             <Badge className="bg-white/20 text-white border-white/30">
@@ -190,7 +215,7 @@ const Index = () => {
           <CardHeader className="pb-3 pt-6">
             <div className="text-center space-y-2">
               <p className="text-sm text-white/80">우아한테크코스</p>
-              <p className="text-xs text-white/70">2024년 크루들로부터</p>
+              <p className="text-xs text-white/70">2025년 크루들로부터</p>
             </div>
             <CardTitle className="text-lg flex items-center justify-center">
               <Vote className="h-5 w-5 mr-2" />
@@ -220,7 +245,7 @@ const Index = () => {
                 size="lg"
               >
                 <Vote className="h-4 w-4 mr-2" />
-                스토어에서 HYPE 검색!
+                투표하기
               </Button>
             )}
 
@@ -257,7 +282,6 @@ const Index = () => {
           </Card>
         </div>
 
-        {/* Community Stats */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">커뮤니티 현황</CardTitle>
@@ -278,7 +302,6 @@ const Index = () => {
           </CardContent>
         </Card>
 
-        {/* 친구 초대 카드 - 4명 이하일 때 표시 */}
         {memberCount <= 4 && (
           <Card className="border-orange-200 bg-orange-50">
             <CardContent className="p-4 text-center space-y-3">
@@ -310,7 +333,7 @@ const Index = () => {
       <LoginModal 
         isOpen={showLoginModal} 
         onClose={() => setShowLoginModal(false)}
-        onLogin={setUser}
+        onLogin={handleLoginSuccess}
       />
       
       <VoteModal

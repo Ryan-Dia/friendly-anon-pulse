@@ -34,18 +34,14 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }: VoteModa
   }, [isOpen, user]);
 
   const generateCandidates = () => {
-    // 더미 사용자 데이터 (4명으로 설정)
-    const allMembers: User[] = [
-      { id: '1', nickname: '코딩왕', affiliation: '우아한테크코스' },
-      { id: '2', nickname: '디버거', affiliation: '우아한테크코스' },
-      { id: '3', nickname: '알고리즘마스터', affiliation: '우아한테크코스' },
-      { id: '4', nickname: '풀스택개발자', affiliation: '우아한테크코스' },
-    ];
+    // 전체 사용자 목록 가져오기
+    const savedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+    const allMembers = savedUsers.filter((u: User) => u.affiliation === '우아한테크코스');
 
     // 현재 사용자 제외
-    const otherMembers = allMembers.filter(member => member.id !== user?.id);
+    const otherMembers = allMembers.filter((member: User) => member.id !== user?.id);
     
-    // 전체 멤버를 선택지로 제공 (4명 이하이므로)
+    // 전체 멤버를 선택지로 제공
     setCandidates(otherMembers);
   };
 
@@ -118,7 +114,7 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }: VoteModa
         </DialogHeader>
         
         <div className="space-y-6">
-          {/* Question Card - 이미지 참고하여 디자인 개선 */}
+          {/* Question Card */}
           <div className="text-center space-y-4">
             <div className="w-20 h-20 bg-white/20 rounded-full mx-auto flex items-center justify-center">
               <span className="text-3xl">🤔</span>
@@ -139,7 +135,7 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }: VoteModa
             </Badge>
           </div>
 
-          {/* Candidates Grid - 이미지 스타일 참고 */}
+          {/* Candidates Grid */}
           <div className="grid grid-cols-2 gap-3">
             {candidates.map((candidate) => (
               <Card 
@@ -184,7 +180,7 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }: VoteModa
               className="w-full bg-white text-purple-600 hover:bg-white/90 font-bold py-3 rounded-2xl"
               size="lg"
             >
-              {loading ? "투표 중..." : "스토어에서 HYPE 검색!"}
+              {loading ? "투표 중..." : "투표하기"}
             </Button>
             
             {/* 친구 초대 버튼 - 4명 이하일 때 표시 */}

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -151,7 +150,6 @@ const AdminModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
             <TabsTrigger value="stats">투표 통계</TabsTrigger>
           </TabsList>
           
-          {/* 오늘의 질문 관리 */}
           <TabsContent value="question" className="space-y-4">
             <Card>
               <CardHeader>
@@ -206,7 +204,6 @@ const AdminModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
             </Card>
           </TabsContent>
           
-          {/* 사용자 관리 */}
           <TabsContent value="users" className="space-y-4">
             <Card>
               <CardHeader>
@@ -257,7 +254,6 @@ const AdminModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
             </Card>
           </TabsContent>
           
-          {/* 투표 통계 */}
           <TabsContent value="stats" className="space-y-4">
             <div className="grid gap-4">
               <Card>
