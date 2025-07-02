@@ -9,14 +9,23 @@ import LoginModal from "@/components/LoginModal";
 import VoteModal from "@/components/VoteModal";
 import AdminModal from "@/components/AdminModal";
 
+interface User {
+  id: string;
+  email: string;
+  nickname: string;
+  affiliation: string;
+  isAdmin?: boolean;
+}
+
 const Index = () => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [todayQuestion, setTodayQuestion] = useState("");
+  const [todayQuestions, setTodayQuestions] = useState<string[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [hasVotedToday, setHasVotedToday] = useState(false);
-  const [memberCount, setMemberCount] = useState(8);
+  const [memberCount, setMemberCount] = useState(4);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -28,24 +37,41 @@ const Index = () => {
       checkTodayVote(parsedUser.id);
     }
     
-    // 오늘의 질문 가져오기
-    fetchTodayQuestion();
+    // 오늘의 질문들 가져오기
+    fetchTodayQuestions();
     
     // 멤버 수 가져오기
     fetchMemberCount();
   }, []);
 
-  const fetchTodayQuestion = async () => {
-    // 실제 API 연동 시 구현
-    setTodayQuestion("오늘 가장 함께 점심을 먹고 싶은 사람은?");
+  const fetchTodayQuestions = () => {
+    const defaultQuestions = [
+      "오늘 가장 함께 점심을 먹고 싶은 사람은?",
+      "세상에서 제일 웃긴 것 같은 사람은?",
+      "힘든 일이 있을 때 기대고 싶은 사람은?",
+      "가장 센스가 좋다고 생각하는 사람은?",
+      "같이 여행을 가고 싶은 사람은?"
+    ];
+    
+    const savedQuestions = localStorage.getItem('todayQuestions');
+    if (savedQuestions) {
+      setTodayQuestions(JSON.parse(savedQuestions));
+    } else {
+      setTodayQuestions(defaultQuestions);
+      localStorage.setItem('todayQuestions', JSON.stringify(defaultQuestions));
+    }
+
+    const savedIndex = localStorage.getItem('currentQuestionIndex');
+    if (savedIndex) {
+      setCurrentQuestionIndex(Number(savedIndex));
+    }
   };
 
-  const fetchMemberCount = async () => {
-    // 실제 API 연동 시 구현
-    setMemberCount(8);
+  const fetchMemberCount = () => {
+    setMemberCount(4); // 더미 회원 4명으로 설정
   };
 
-  const checkTodayVote = async (userId) => {
+  const checkTodayVote = (userId: string) => {
     // 오늘 투표했는지 확인
     const today = new Date().toDateString();
     const lastVote = localStorage.getItem(`lastVote_${userId}`);
@@ -65,14 +91,27 @@ const Index = () => {
   const handleVoteComplete = () => {
     setHasVotedToday(true);
     const today = new Date().toDateString();
-    localStorage.setItem(`lastVote_${user.id}`, today);
+    localStorage.setItem(`lastVote_${user!.id}`, today);
     toast({
       title: "투표 완료!",
       description: "익명으로 투표가 전송되었습니다.",
     });
   };
 
+  const handleNextQuestion = () => {
+    const nextIndex = (currentQuestionIndex + 1) % todayQuestions.length;
+    setCurrentQuestionIndex(nextIndex);
+    localStorage.setItem('currentQuestionIndex', nextIndex.toString());
+    
+    // 새로운 질문으로 바뀌면 투표 상태 초기화
+    setHasVotedToday(false);
+    if (user) {
+      localStorage.removeItem(`lastVote_${user.id}`);
+    }
+  };
+
   const isAdmin = user?.email === 'admin@woowacourse.io';
+  const currentQuestion = todayQuestions[currentQuestionIndex] || "질문을 불러오는 중...";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 to-blue-50">
@@ -140,33 +179,62 @@ const Index = () => {
           </Badge>
         </div>
 
-        {/* Today's Question Card */}
-        <Card className="shadow-lg border-0 bg-gradient-to-r from-pink-500 to-red-500 text-white">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center">
+        {/* Today's Question Card - 이미지 스타일 참고하여 개선 */}
+        <Card className="shadow-lg border-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white relative overflow-hidden">
+          <div className="absolute top-4 right-4">
+            <Badge className="bg-white/20 text-white border-white/30">
+              {currentQuestionIndex + 1}/{todayQuestions.length}
+            </Badge>
+          </div>
+          
+          <CardHeader className="pb-3 pt-6">
+            <div className="text-center space-y-2">
+              <p className="text-sm text-white/80">우아한테크코스</p>
+              <p className="text-xs text-white/70">2024년 크루들로부터</p>
+            </div>
+            <CardTitle className="text-lg flex items-center justify-center">
               <Vote className="h-5 w-5 mr-2" />
               오늘의 질문
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-white/90 font-medium">
-              {todayQuestion}
-            </p>
+          
+          <CardContent className="space-y-6 pb-8">
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 bg-white/20 rounded-full mx-auto flex items-center justify-center">
+                <span className="text-2xl">🤔</span>
+              </div>
+              <p className="text-white font-medium text-lg leading-relaxed">
+                {currentQuestion}
+              </p>
+            </div>
+            
             {hasVotedToday ? (
-              <div className="flex items-center space-x-2 bg-white/20 rounded-lg p-3">
+              <div className="flex items-center justify-center space-x-2 bg-white/20 rounded-2xl p-4">
                 <Heart className="h-4 w-4 text-pink-200" />
-                <span className="text-sm text-white/80">오늘 투표를 완료했습니다</span>
+                <span className="text-sm text-white/90">오늘 투표를 완료했습니다</span>
               </div>
             ) : (
               <Button
                 onClick={handleVote}
-                className="w-full bg-white text-pink-600 hover:bg-gray-50"
+                className="w-full bg-white text-purple-600 hover:bg-white/90 font-bold py-3 rounded-2xl"
                 size="lg"
               >
                 <Vote className="h-4 w-4 mr-2" />
-                투표하기
+                스토어에서 HYPE 검색!
               </Button>
             )}
+
+            {/* Question Navigation */}
+            <div className="flex justify-center">
+              <Button
+                variant="ghost"
+                onClick={handleNextQuestion}
+                className="text-white/80 hover:text-white hover:bg-white/10"
+                size="sm"
+              >
+                다음 질문 보기 →
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -210,6 +278,7 @@ const Index = () => {
           </CardContent>
         </Card>
 
+        {/* 친구 초대 카드 - 4명 이하일 때 표시 */}
         {memberCount <= 4 && (
           <Card className="border-orange-200 bg-orange-50">
             <CardContent className="p-4 text-center space-y-3">
@@ -223,6 +292,12 @@ const Index = () => {
               <Button 
                 variant="outline" 
                 className="border-orange-300 text-orange-600 hover:bg-orange-100"
+                onClick={() => {
+                  toast({
+                    title: "친구 초대",
+                    description: "곧 친구 초대 기능이 추가될 예정입니다!",
+                  });
+                }}
               >
                 친구 초대하기
               </Button>
@@ -241,7 +316,7 @@ const Index = () => {
       <VoteModal
         isOpen={showVoteModal}
         onClose={() => setShowVoteModal(false)}
-        question={todayQuestion}
+        question={currentQuestion}
         user={user}
         onVoteComplete={handleVoteComplete}
       />

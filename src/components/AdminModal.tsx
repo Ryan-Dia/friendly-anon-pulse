@@ -8,13 +8,36 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, Users, Vote, Trash2, Edit, Plus, UserX } from "lucide-react";
+import { Settings, Users, Vote, Edit, UserX } from "lucide-react";
 
-const AdminModal = ({ isOpen, onClose }) => {
-  const [todayQuestion, setTodayQuestion] = useState("오늘 가장 함께 점심을 먹고 싶은 사람은?");
+interface User {
+  id: string;
+  email: string;
+  nickname: string;
+  affiliation: string;
+  createdAt: string;
+}
+
+interface VoteData {
+  voterId: string;
+  candidateId: string;
+  question: string;
+  timestamp: string;
+  date: string;
+}
+
+const AdminModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const [todayQuestions, setTodayQuestions] = useState<string[]>([
+    "오늘 가장 함께 점심을 먹고 싶은 사람은?",
+    "세상에서 제일 웃긴 것 같은 사람은?",
+    "힘든 일이 있을 때 기대고 싶은 사람은?",
+    "가장 센스가 좋다고 생각하는 사람은?",
+    "같이 여행을 가고 싶은 사람은?"
+  ]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [newQuestion, setNewQuestion] = useState("");
-  const [users, setUsers] = useState([]);
-  const [votes, setVotes] = useState([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [votes, setVotes] = useState<VoteData[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -27,15 +50,13 @@ const AdminModal = ({ isOpen, onClose }) => {
     // 사용자 데이터 로드
     const savedUsers = JSON.parse(localStorage.getItem('users') || '[]');
     
-    // 더미 사용자들 추가 (처음에만)
+    // 더미 사용자들 4명으로 설정
     if (savedUsers.length === 0) {
-      const dummyUsers = [
+      const dummyUsers: User[] = [
         { id: '1', email: 'user1@woowacourse.io', nickname: '코딩왕', affiliation: '우아한테크코스', createdAt: new Date().toISOString() },
         { id: '2', email: 'user2@woowacourse.io', nickname: '디버거', affiliation: '우아한테크코스', createdAt: new Date().toISOString() },
         { id: '3', email: 'user3@woowacourse.io', nickname: '알고리즘마스터', affiliation: '우아한테크코스', createdAt: new Date().toISOString() },
-        { id: '4', email: 'user4@woowacourse.io', nickname: '풀스택개발자', affiliation: '우아한테크코스', createdAt: new Date().toISOString() },
-        { id: '5', email: 'user5@woowacourse.io', nickname: '데이터베이스전문가', affiliation: '우아한테크코스', createdAt: new Date().toISOString() },
-        { id: '6', email: 'user6@woowacourse.io', nickname: '프론트엔드구루', affiliation: '우아한테크코스', createdAt: new Date().toISOString() }
+        { id: '4', email: 'user4@woowacourse.io', nickname: '풀스택개발자', affiliation: '우아한테크코스', createdAt: new Date().toISOString() }
       ];
       localStorage.setItem('users', JSON.stringify(dummyUsers));
       setUsers(dummyUsers);
@@ -46,6 +67,19 @@ const AdminModal = ({ isOpen, onClose }) => {
     // 투표 데이터 로드
     const savedVotes = JSON.parse(localStorage.getItem('votes') || '[]');
     setVotes(savedVotes);
+
+    // 저장된 질문들 로드
+    const savedQuestions = localStorage.getItem('todayQuestions');
+    if (savedQuestions) {
+      setTodayQuestions(JSON.parse(savedQuestions));
+    } else {
+      localStorage.setItem('todayQuestions', JSON.stringify(todayQuestions));
+    }
+
+    const savedIndex = localStorage.getItem('currentQuestionIndex');
+    if (savedIndex) {
+      setCurrentQuestionIndex(Number(savedIndex));
+    }
   };
 
   const handleUpdateQuestion = () => {
@@ -58,8 +92,10 @@ const AdminModal = ({ isOpen, onClose }) => {
       return;
     }
 
-    setTodayQuestion(newQuestion);
-    localStorage.setItem('todayQuestion', newQuestion);
+    const updatedQuestions = [...todayQuestions];
+    updatedQuestions[currentQuestionIndex] = newQuestion;
+    setTodayQuestions(updatedQuestions);
+    localStorage.setItem('todayQuestions', JSON.stringify(updatedQuestions));
     setNewQuestion("");
     
     toast({
@@ -68,7 +104,7 @@ const AdminModal = ({ isOpen, onClose }) => {
     });
   };
 
-  const handleDeleteUser = (userId) => {
+  const handleDeleteUser = (userId: string) => {
     const updatedUsers = users.filter(user => user.id !== userId);
     setUsers(updatedUsers);
     localStorage.setItem('users', JSON.stringify(updatedUsers));
@@ -86,7 +122,7 @@ const AdminModal = ({ isOpen, onClose }) => {
 
   const getVoteStats = () => {
     const todayVotes = getTodayVotes();
-    const voteCount = {};
+    const voteCount: Record<string, number> = {};
     
     todayVotes.forEach(vote => {
       const candidate = users.find(u => u.id === vote.candidateId);
@@ -121,15 +157,39 @@ const AdminModal = ({ isOpen, onClose }) => {
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Vote className="h-5 w-5 mr-2" />
-                  현재 질문
+                  현재 질문들
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="p-4 bg-gradient-to-r from-pink-500 to-red-500 text-white rounded-lg">
-                  <p className="font-medium">{todayQuestion}</p>
-                </div>
+                {todayQuestions.map((question, index) => (
+                  <div key={index} className={`p-4 rounded-lg ${
+                    index === currentQuestionIndex 
+                      ? 'bg-gradient-to-r from-pink-500 to-red-500 text-white' 
+                      : 'bg-gray-100'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium">{question}</p>
+                      {index === currentQuestionIndex && (
+                        <Badge className="bg-white/20 text-white">현재 활성</Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
                 
                 <div className="space-y-3">
+                  <Label htmlFor="question-select">수정할 질문 선택</Label>
+                  <select
+                    value={currentQuestionIndex}
+                    onChange={(e) => setCurrentQuestionIndex(Number(e.target.value))}
+                    className="w-full p-2 border rounded-md"
+                  >
+                    {todayQuestions.map((_, index) => (
+                      <option key={index} value={index}>
+                        질문 {index + 1}
+                      </option>
+                    ))}
+                  </select>
+                  
                   <Label htmlFor="new-question">새로운 질문</Label>
                   <Input
                     id="new-question"

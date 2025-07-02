@@ -7,9 +7,23 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Vote, Users, UserCheck } from "lucide-react";
 
-const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }) => {
-  const [candidates, setCandidates] = useState([]);
-  const [selectedCandidate, setSelectedCandidate] = useState(null);
+interface User {
+  id: string;
+  nickname: string;
+  affiliation: string;
+}
+
+interface VoteModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  question: string;
+  user: User | null;
+  onVoteComplete: () => void;
+}
+
+const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }: VoteModalProps) => {
+  const [candidates, setCandidates] = useState<User[]>([]);
+  const [selectedCandidate, setSelectedCandidate] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -20,26 +34,19 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }) => {
   }, [isOpen, user]);
 
   const generateCandidates = () => {
-    // 더미 사용자 데이터 (실제로는 API에서 가져옴)
-    const allMembers = [
+    // 더미 사용자 데이터 (4명으로 설정)
+    const allMembers: User[] = [
       { id: '1', nickname: '코딩왕', affiliation: '우아한테크코스' },
       { id: '2', nickname: '디버거', affiliation: '우아한테크코스' },
       { id: '3', nickname: '알고리즘마스터', affiliation: '우아한테크코스' },
       { id: '4', nickname: '풀스택개발자', affiliation: '우아한테크코스' },
-      { id: '5', nickname: '데이터베이스전문가', affiliation: '우아한테크코스' },
-      { id: '6', nickname: '프론트엔드구루', affiliation: '우아한테크코스' },
-      { id: '7', nickname: '백엔드마스터', affiliation: '우아한테크코스' },
-      { id: '8', nickname: 'UX디자이너', affiliation: '우아한테크코스' },
     ];
 
     // 현재 사용자 제외
     const otherMembers = allMembers.filter(member => member.id !== user?.id);
     
-    // 랜덤하게 6명 선택
-    const shuffled = otherMembers.sort(() => 0.5 - Math.random());
-    const selectedCandidates = shuffled.slice(0, Math.min(6, otherMembers.length));
-    
-    setCandidates(selectedCandidates);
+    // 전체 멤버를 선택지로 제공 (4명 이하이므로)
+    setCandidates(otherMembers);
   };
 
   const handleVote = async () => {
@@ -55,9 +62,9 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }) => {
     setLoading(true);
 
     try {
-      // 투표 결과 저장 (실제로는 API 호출)
+      // 투표 결과 저장
       const voteData = {
-        voterId: user.id,
+        voterId: user!.id,
         candidateId: selectedCandidate.id,
         question: question,
         timestamp: new Date().toISOString(),
@@ -102,59 +109,60 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 border-none text-white">
         <DialogHeader>
-          <DialogTitle className="flex items-center text-lg">
-            <Vote className="h-5 w-5 mr-2 text-pink-500" />
+          <DialogTitle className="flex items-center text-lg text-white">
+            <Vote className="h-5 w-5 mr-2" />
             오늘의 투표
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
-          {/* Question */}
-          <Card className="bg-gradient-to-r from-pink-500 to-red-500 text-white">
-            <CardContent className="p-4">
-              <p className="font-medium text-center">{question}</p>
-            </CardContent>
-          </Card>
+        <div className="space-y-6">
+          {/* Question Card - 이미지 참고하여 디자인 개선 */}
+          <div className="text-center space-y-4">
+            <div className="w-20 h-20 bg-white/20 rounded-full mx-auto flex items-center justify-center">
+              <span className="text-3xl">🤔</span>
+            </div>
+            <h2 className="text-xl font-bold text-white leading-relaxed">
+              {question}
+            </h2>
+          </div>
 
           {/* Instructions */}
-          <div className="text-center space-y-1">
-            <p className="text-sm text-gray-600">
+          <div className="text-center space-y-2">
+            <p className="text-sm text-white/80">
               익명으로 투표합니다. 선택된 분에게만 알림이 전송됩니다.
             </p>
-            <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+            <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
               <Users className="h-3 w-3 mr-1" />
               {candidates.length}명 중 선택
             </Badge>
           </div>
 
-          {/* Candidates */}
-          <div className="grid gap-3">
+          {/* Candidates Grid - 이미지 스타일 참고 */}
+          <div className="grid grid-cols-2 gap-3">
             {candidates.map((candidate) => (
               <Card 
                 key={candidate.id}
-                className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+                className={`cursor-pointer transition-all duration-200 hover:scale-105 ${
                   selectedCandidate?.id === candidate.id 
-                    ? 'ring-2 ring-pink-500 bg-pink-50' 
-                    : 'hover:bg-gray-50'
-                }`}
+                    ? 'ring-2 ring-white bg-white/30 scale-105' 
+                    : 'bg-white/10 hover:bg-white/20'
+                } border-white/20`}
                 onClick={() => setSelectedCandidate(candidate)}
               >
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-semibold text-sm">
-                        {candidate.nickname.charAt(0)}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{candidate.nickname}</p>
-                      <p className="text-xs text-gray-500">{candidate.affiliation}</p>
-                    </div>
+                <CardContent className="p-4 text-center space-y-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full mx-auto flex items-center justify-center">
+                    <span className="text-white font-semibold text-lg">
+                      {candidate.nickname.charAt(0)}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-white text-sm">{candidate.nickname}</p>
+                    <p className="text-xs text-white/70">@{candidate.nickname.toLowerCase()}</p>
                   </div>
                   {selectedCandidate?.id === candidate.id && (
-                    <UserCheck className="h-5 w-5 text-pink-500" />
+                    <UserCheck className="h-5 w-5 text-white mx-auto" />
                   )}
                 </CardContent>
               </Card>
@@ -162,22 +170,38 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }) => {
           </div>
 
           {candidates.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              <Users className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+            <div className="text-center py-8 text-white/70">
+              <Users className="h-8 w-8 mx-auto mb-2" />
               <p>투표할 수 있는 멤버가 없습니다.</p>
             </div>
           )}
 
           {/* Vote Button */}
-          <div className="pt-4 border-t">
+          <div className="pt-4">
             <Button 
               onClick={handleVote}
               disabled={!selectedCandidate || loading}
-              className="w-full bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600"
+              className="w-full bg-white text-purple-600 hover:bg-white/90 font-bold py-3 rounded-2xl"
               size="lg"
             >
-              {loading ? "투표 중..." : "익명 투표하기"}
+              {loading ? "투표 중..." : "스토어에서 HYPE 검색!"}
             </Button>
+            
+            {/* 친구 초대 버튼 - 4명 이하일 때 표시 */}
+            {candidates.length <= 3 && (
+              <Button 
+                variant="outline"
+                className="w-full mt-3 border-white/30 text-white hover:bg-white/10"
+                onClick={() => {
+                  toast({
+                    title: "친구 초대",
+                    description: "곧 친구 초대 기능이 추가될 예정입니다!",
+                  });
+                }}
+              >
+                친구 초대하기
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
