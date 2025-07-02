@@ -1,73 +1,155 @@
-# Welcome to your Lovable project
 
-## Project info
+# with - 우아한테크코스 익명 Q&A SNS
 
-**URL**: https://lovable.dev/projects/33e84082-f656-4d54-9c93-1bfd373590dc
+우아한테크코스와 함께하는 익명 소통 플랫폼입니다.
 
-## How can I edit this code?
+## 🌟 주요 기능
 
-There are several ways of editing your application.
+### 🗳️ 투표 시스템
+- **오늘의 질문**: 매일 새로운 질문으로 투표 참여
+- **익명 투표**: 소속 인원 중 자신을 제외한 6명 랜덤 선택
+- **실시간 알림**: 투표받은 사용자에게 즉시 알림 전송
+- **친구 초대**: 소속 인원 4명 이하 시 친구 초대 기능 활성화
 
-**Use Lovable**
+### 👤 사용자 관리
+- **이메일 회원가입**: 간단한 이메일/비밀번호 인증
+- **우아한테크코스 전용**: 소속이 "우아한테크코스"로 고정
+- **프로필 관리**: 닉네임 설정 및 개인정보 관리
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/33e84082-f656-4d54-9c93-1bfd373590dc) and start prompting.
+### 🔧 관리자 기능
+- **질문 관리**: 오늘의 질문 수정 및 삭제
+- **사용자 관리**: 회원 목록 조회 및 삭제
+- **투표 통계**: 실시간 투표 현황 및 순위 확인
+- **더미 데이터**: 테스트용 사용자 6명 자동 생성
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🎨 디자인 시스템
 
-**Use your preferred IDE**
+### 컬러 팔레트
+- **메인**: #FF6B6B (따뜻한 핑크)
+- **서브**: #4ECDC4 (민트), #FFE66D (노랑)
+- **배경**: #FFFFFF, #F7F7F7
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### 타이포그래피
+- **폰트**: Noto Sans KR
+- **제목**: Bold 18-24pt
+- **본문**: Regular 14-16pt
+- **버튼**: Medium 16pt
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### 컴포넌트
+- **카드**: 소프트 쉐도우, 2xl 라운드, 16px 패딩
+- **버튼**: 호버 스케일 애니메이션
+- **모달**: 바텀 시트 스타일, 드래그 핸들
 
-Follow these steps:
+## 🚀 시작하기
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### 설치
+```bash
+npm install
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 개발 서버 실행
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### 빌드
+```bash
+npm run build
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 👥 계정 정보
 
-**Use GitHub Codespaces**
+### 관리자 계정
+- **이메일**: admin@woowacourse.io
+- **비밀번호**: admin123!
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### 더미 사용자 (자동 생성)
+1. user1@woowacourse.io - 코딩왕
+2. user2@woowacourse.io - 디버거
+3. user3@woowacourse.io - 알고리즘마스터
+4. user4@woowacourse.io - 풀스택개발자
+5. user5@woowacourse.io - 데이터베이스전문가
+6. user6@woowacourse.io - 프론트엔드구루
 
-## What technologies are used for this project?
+## 🛠️ 기술 스택
 
-This project is built with:
+### Frontend
+- **React 18**: 최신 React 훅 및 기능 활용
+- **TypeScript**: 타입 안정성 보장
+- **Tailwind CSS**: 토스 디자인 시스템 구현
+- **Shadcn/ui**: 고품질 UI 컴포넌트
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### 상태 관리
+- **localStorage**: 클라이언트 사이드 데이터 저장
+- **React State**: 컴포넌트 상태 관리
 
-## How can I deploy this project?
+### 빌드 도구
+- **Vite**: 빠른 개발 환경
+- **ESLint**: 코드 품질 관리
 
-Simply open [Lovable](https://lovable.dev/projects/33e84082-f656-4d54-9c93-1bfd373590dc) and click on Share -> Publish.
+## 📱 주요 화면
 
-## Can I connect a custom domain to my Lovable project?
+### 1. 메인 페이지
+- 우아한테크코스 커뮤니티 소개
+- 오늘의 질문 카드
+- 커뮤니티 현황 통계
+- 친구 초대 버튼 (조건부 표시)
 
-Yes, you can!
+### 2. 투표 모달
+- 오늘의 질문 표시
+- 랜덤 6명 후보자 목록
+- 익명 투표 버튼
+- 투표 완료 알림
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### 3. 로그인/회원가입 모달
+- 탭 구조로 로그인/회원가입 분리
+- 이메일/비밀번호 입력
+- 닉네임 설정 (회원가입)
+- 소속 자동 설정
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+### 4. 관리자 대시보드
+- 오늘의 질문 관리
+- 사용자 목록 및 삭제
+- 투표 통계 및 순위
+- 실시간 현황 모니터링
+
+## 🔔 알림 시스템
+
+### 투표 알림
+- 투표받은 사용자에게 즉시 알림
+- 익명성 보장 - 누가 투표했는지 알 수 없음
+- 로컬스토리지 기반 알림 저장
+
+### 알림 유형
+- `vote`: 투표 받음 알림
+- `friend_request`: 친구 요청 (향후 구현)
+- `system`: 시스템 공지 (향후 구현)
+
+## 🎯 향후 계획
+
+### Phase 1 (현재)
+- ✅ 기본 투표 시스템
+- ✅ 사용자 인증
+- ✅ 관리자 대시보드
+
+### Phase 2 (예정)
+- 🔄 익명 질문/답변 시스템
+- 🔄 실시간 피드
+- 🔄 친구 시스템
+
+### Phase 3 (예정)
+- 🔄 푸시 알림
+- 🔄 모바일 앱 (React Native)
+- 🔄 소셜 로그인
+
+## 📄 라이선스
+
+MIT License
+
+## 👨‍💻 개발자
+
+with Team - 우아한테크코스와 함께
+
+---
+
+*"익명으로 소통하고, 서로를 알아가는 특별한 공간"*
