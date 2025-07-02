@@ -20,8 +20,7 @@ import {
   subscribeToNotifications,
   subscribeToProfiles,
   signOut,
-  initializeQuestions,
-  checkAndCreateProfile
+  initializeQuestions
 } from '@/lib/supabase';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -65,9 +64,6 @@ const Index = () => {
         setUser(null);
         setHasVoted(false);
         setUnreadVotes(0);
-      } else if (event === 'TOKEN_REFRESHED' && session) {
-        console.log('Token refreshed, reloading profile...');
-        await loadUserProfile();
       }
     });
 
@@ -79,7 +75,7 @@ const Index = () => {
       loadData();
       setupSubscriptions();
     } else {
-      // 로그인하지 않은 상태에서도 질문은 로드
+      // 로그인하지 않은 상태에서도 질문 로드
       loadQuestionData();
     }
   }, [user]);
@@ -104,7 +100,7 @@ const Index = () => {
       console.error('Auth check error:', error);
       toast({
         title: "연결 오류",
-        description: "서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.",
+        description: "서버에 연결할 수 없습니다. 새로고침해주세요.",
         variant: "destructive"
       });
     } finally {
@@ -115,33 +111,16 @@ const Index = () => {
   const loadUserProfile = async () => {
     try {
       console.log('Loading user profile...');
-      let profile = await getProfile();
+      const profile = await getProfile();
       
       if (profile) {
         console.log('Profile loaded:', profile.nickname);
         setUser(profile);
         return profile;
       } else {
-        console.log('No profile found, attempting to create one...');
-        // 프로필이 없으면 생성 시도
-        try {
-          const newProfile = await checkAndCreateProfile();
-          if (newProfile) {
-            console.log('Profile created:', newProfile.nickname);
-            setUser({
-              id: newProfile.id,
-              email: newProfile.email,
-              nickname: newProfile.nickname,
-              affiliation: newProfile.affiliation,
-              isAdmin: newProfile.is_admin
-            });
-            return newProfile;
-          }
-        } catch (profileError) {
-          console.error('Profile creation failed:', profileError);
-        }
+        console.log('No profile found');
+        return null;
       }
-      return null;
     } catch (error) {
       console.error('Profile load error:', error);
       toast({
@@ -158,16 +137,6 @@ const Index = () => {
     try {
       console.log('Loading question data...');
       
-      // Supabase 연결 상태 확인
-      const { data: healthCheck, error: healthError } = await supabase
-        .from('questions')
-        .select('count')
-        .limit(1);
-      
-      if (healthError) {
-        throw new Error(`Database connection failed: ${healthError.message}`);
-      }
-      
       // 질문 초기화 (빈 테이블인 경우에만 실행됨)
       await initializeQuestions();
       
@@ -183,14 +152,12 @@ const Index = () => {
     } catch (error) {
       console.error('Question data load error:', error);
       
-      // 더 구체적인 에러 메시지 제공
       let errorMessage = "질문을 불러오는데 실패했습니다.";
       if (error instanceof TypeError && error.message.includes('fetch')) {
         errorMessage = "서버에 연결할 수 없습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.";
       } else if (error instanceof Error) {
-        // RLS 정책 위반 에러인 경우 사용자에게 친화적인 메시지 표시
         if (error.message.includes('row-level security policy')) {
-          errorMessage = "질문이 아직 준비되지 않았습니다. 관리자가 질문을 설정할 때까지 기다려주세요.";
+          errorMessage = "질문이 아직 준비되지 않았습니다.";
         } else {
           errorMessage = error.message;
         }
@@ -423,14 +390,7 @@ const Index = () => {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-white/80 text-lg">
-                    {!user ? "질문이 준비되지 않았습니다" : "질문을 불러올 수 없습니다"}
-                  </p>
-                  {!user && (
-                    <p className="text-white/60 text-sm">
-                      관리자가 질문을 설정할 때까지 기다려주세요
-                    </p>
-                  )}
+                  <p className="text-white/80 text-lg">질문을 불러올 수 없습니다</p>
                   <Button
                     variant="outline"
                     size="sm"
