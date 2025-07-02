@@ -71,8 +71,8 @@ const Index = () => {
       loadData();
       setupSubscriptions();
     } else {
-      // 로그인하지 않은 상태에서도 질문은 로드 (단, 초기화는 하지 않음)
-      loadQuestionData(false);
+      // 로그인하지 않은 상태에서도 질문은 로드
+      loadQuestionData();
     }
   }, [user]);
 
@@ -82,12 +82,11 @@ const Index = () => {
       if (session) {
         const profile = await loadUserProfile();
         if (profile) {
-          const isAdmin = profile.isAdmin || profile.email === 'admin@woowacourse.io';
-          await loadQuestionData(isAdmin);
+          await loadQuestionData();
         }
       } else {
-        // 로그인하지 않은 상태에서도 질문 로드 (단, 초기화는 하지 않음)
-        await loadQuestionData(false);
+        // 로그인하지 않은 상태에서도 질문 로드
+        await loadQuestionData();
       }
     } catch (error) {
       console.error('Auth check error:', error);
@@ -120,7 +119,7 @@ const Index = () => {
     }
   };
 
-  const loadQuestionData = async (isAdminUser: boolean = false) => {
+  const loadQuestionData = async () => {
     setQuestionLoading(true);
     try {
       console.log('Loading question data...');
@@ -135,10 +134,8 @@ const Index = () => {
         throw new Error(`Database connection failed: ${healthError.message}`);
       }
       
-      // 관리자인 경우에만 질문 초기화 시도
-      if (isAdminUser) {
-        await initializeQuestions();
-      }
+      // 질문 초기화 (빈 테이블인 경우에만 실행됨)
+      await initializeQuestions();
       
       // 활성 질문 가져오기
       const question = await getActiveQuestion();
@@ -159,11 +156,7 @@ const Index = () => {
       } else if (error instanceof Error) {
         // RLS 정책 위반 에러인 경우 사용자에게 친화적인 메시지 표시
         if (error.message.includes('row-level security policy')) {
-          if (!isAdminUser) {
-            errorMessage = "질문이 아직 준비되지 않았습니다. 관리자가 질문을 설정할 때까지 기다려주세요.";
-          } else {
-            errorMessage = "질문 초기화 중 오류가 발생했습니다.";
-          }
+          errorMessage = "질문이 아직 준비되지 않았습니다. 관리자가 질문을 설정할 때까지 기다려주세요.";
         } else {
           errorMessage = error.message;
         }
@@ -181,11 +174,8 @@ const Index = () => {
 
   const loadData = async () => {
     try {
-      // 현재 사용자가 관리자인지 확인
-      const isAdmin = user?.isAdmin || user?.email === 'admin@woowacourse.io';
-      
       // 질문 데이터 로드
-      await loadQuestionData(isAdmin);
+      await loadQuestionData();
 
       // 오늘 투표 여부 확인
       const voted = await hasVotedToday();
@@ -271,8 +261,7 @@ const Index = () => {
   };
 
   const handleRefreshQuestion = async () => {
-    const isAdmin = user?.isAdmin || user?.email === 'admin@woowacourse.io';
-    await loadQuestionData(isAdmin);
+    await loadQuestionData();
     toast({
       title: "새로고침 완료",
       description: "질문을 다시 불러왔습니다.",
