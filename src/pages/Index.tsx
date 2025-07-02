@@ -87,6 +87,11 @@ const Index = () => {
       }
     } catch (error) {
       console.error('Auth check error:', error);
+      toast({
+        title: "연결 오류",
+        description: "서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -100,6 +105,11 @@ const Index = () => {
       }
     } catch (error) {
       console.error('Profile load error:', error);
+      toast({
+        title: "프로필 로딩 오류",
+        description: "사용자 프로필을 불러오는데 실패했습니다.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -107,6 +117,16 @@ const Index = () => {
     setQuestionLoading(true);
     try {
       console.log('Loading question data...');
+      
+      // Supabase 연결 상태 확인
+      const { data: healthCheck, error: healthError } = await supabase
+        .from('questions')
+        .select('count')
+        .limit(1);
+      
+      if (healthError) {
+        throw new Error(`Database connection failed: ${healthError.message}`);
+      }
       
       // 먼저 질문 초기화 시도
       await initializeQuestions();
@@ -122,9 +142,18 @@ const Index = () => {
 
     } catch (error) {
       console.error('Question data load error:', error);
+      
+      // 더 구체적인 에러 메시지 제공
+      let errorMessage = "질문을 불러오는데 실패했습니다.";
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        errorMessage = "서버에 연결할 수 없습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.";
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "질문 로딩 오류",
-        description: "질문을 불러오는데 실패했습니다. 잠시 후 다시 시도해주세요.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -147,6 +176,11 @@ const Index = () => {
 
     } catch (error) {
       console.error('Data load error:', error);
+      toast({
+        title: "데이터 로딩 오류",
+        description: "일부 데이터를 불러오는데 실패했습니다.",
+        variant: "destructive"
+      });
     }
   };
 
