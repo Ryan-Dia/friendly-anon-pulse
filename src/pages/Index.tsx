@@ -71,8 +71,8 @@ const Index = () => {
       loadData();
       setupSubscriptions();
     } else {
-      // 로그인하지 않은 상태에서도 질문은 로드
-      loadQuestionData();
+      // 로그인하지 않은 상태에서도 질문은 로드 (단, 초기화는 하지 않음)
+      loadQuestionData(false);
     }
   }, [user]);
 
@@ -80,10 +80,14 @@ const Index = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        await loadUserProfile();
+        const profile = await loadUserProfile();
+        if (profile) {
+          const isAdmin = profile.isAdmin || profile.email === 'admin@woowacourse.io';
+          await loadQuestionData(isAdmin);
+        }
       } else {
-        // 로그인하지 않은 상태에서도 질문 로드
-        await loadQuestionData();
+        // 로그인하지 않은 상태에서도 질문 로드 (단, 초기화는 하지 않음)
+        await loadQuestionData(false);
       }
     } catch (error) {
       console.error('Auth check error:', error);
@@ -102,7 +106,9 @@ const Index = () => {
       const profile = await getProfile();
       if (profile) {
         setUser(profile);
+        return profile;
       }
+      return null;
     } catch (error) {
       console.error('Profile load error:', error);
       toast({
@@ -110,10 +116,11 @@ const Index = () => {
         description: "사용자 프로필을 불러오는데 실패했습니다.",
         variant: "destructive"
       });
+      return null;
     }
   };
 
-  const loadQuestionData = async () => {
+  const loadQuestionData = async (isAdminUser: boolean = false) => {
     setQuestionLoading(true);
     try {
       console.log('Loading question data...');
@@ -128,8 +135,10 @@ const Index = () => {
         throw new Error(`Database connection failed: ${healthError.message}`);
       }
       
-      // 먼저 질문 초기화 시도
-      await initializeQuestions();
+      // 관리자인 경우에만 질문 초기화 시도
+      if (isAdminUser) {
+        await initializeQuestions();
+      }
       
       // 활성 질문 가져오기
       const question = await getActiveQuestion();
@@ -148,7 +157,16 @@ const Index = () => {
       if (error instanceof TypeError && error.message.includes('fetch')) {
         errorMessage = "서버에 연결할 수 없습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.";
       } else if (error instanceof Error) {
-        errorMessage = error.message;
+        // RLS 정책 위반 에러인 경우 사용자에게 친화적인 메시지 표시
+        if (error.message.includes('row-level security policy')) {
+          if (!isAdminUser) {
+            errorMessage = "질문이 아직 준비되지 않았습니다. 관리자가 질문을 설정할 때까지 기다려주세요.";
+          } else {
+            errorMessage = "질문 초기화 중 오류가 발생했습니다.";
+          }
+        } else {
+          errorMessage = error.message;
+        }
       }
       
       toast({
@@ -163,8 +181,11 @@ const Index = () => {
 
   const loadData = async () => {
     try {
+      // 현재 사용자가 관리자인지 확인
+      const isAdmin = user?.isAdmin || user?.email === 'admin@woowacourse.io';
+      
       // 질문 데이터 로드
-      await loadQuestionData();
+      await loadQuestionData(isAdmin);
 
       // 오늘 투표 여부 확인
       const voted = await hasVotedToday();
@@ -250,7 +271,8 @@ const Index = () => {
   };
 
   const handleRefreshQuestion = async () => {
-    await loadQuestionData();
+    const isAdmin = user?.isAdmin || user?.email === 'admin@woowacourse.io';
+    await loadQuestionData(isAdmin);
     toast({
       title: "새로고침 완료",
       description: "질문을 다시 불러왔습니다.",
@@ -377,7 +399,14 @@ const Index = () => {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-white/80 text-lg">질문을 불러올 수 없습니다</p>
+                  <p className="text-white/80 text-lg">
+                    {!user ? "질문이 준비되지 않았습니다" : "질문을 불러올 수 없습니다"}
+                  </p>
+                  {!user && (
+                    <p className="text-white/60 text-sm">
+                      관리자가 질문을 설정할 때까지 기다려주세요
+                    </p>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
