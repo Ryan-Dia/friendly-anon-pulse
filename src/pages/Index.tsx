@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +10,18 @@ import AdminModal from "@/components/AdminModal";
 import MyPage from "@/components/MyPage";
 import ParticipantsModal from "@/components/ParticipantsModal";
 import BoardModal from "@/components/BoardModal";
+import { 
+  getProfile, 
+  getAllProfiles, 
+  getActiveQuestion, 
+  hasVotedToday, 
+  getUnreadNotificationCount,
+  subscribeToVotes,
+  subscribeToNotifications,
+  subscribeToProfiles,
+  signOut
+} from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 
 interface User {
   id: string;
@@ -28,100 +39,108 @@ const Index = () => {
   const [showMyPage, setShowMyPage] = useState(false);
   const [showParticipantsModal, setShowParticipantsModal] = useState(false);
   const [showBoardModal, setShowBoardModal] = useState(false);
-  const [todayQuestions, setTodayQuestions] = useState<string[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [hasVotedToday, setHasVotedToday] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState<any>(null);
+  const [hasVoted, setHasVoted] = useState(false);
   const [memberCount, setMemberCount] = useState(0);
   const [unreadVotes, setUnreadVotes] = useState(0);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    // 로컬스토리지에서 사용자 정보 확인
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
-      checkTodayVote(parsedUser.id);
-      checkUnreadVotes(parsedUser.id);
-    }
+    // 인증 상태 확인
+    checkAuthState();
     
-    // 오늘의 질문들 가져오기
-    fetchTodayQuestions();
-    
-    // 멤버 수 가져오기
-    fetchMemberCount();
+    // 인증 상태 변경 리스너
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        await loadUserProfile();
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setHasVoted(false);
+        setUnreadVotes(0);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // 스토리지 변경을 감지하여 멤버 수 실시간 업데이트
   useEffect(() => {
-    const handleStorageChange = () => {
-      fetchMemberCount();
-      if (user) {
-        checkUnreadVotes(user.id);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    
-    // 로컬 스토리지 변경도 감지 (같은 탭에서의 변경)
-    const interval = setInterval(() => {
-      fetchMemberCount();
-      if (user) {
-        checkUnreadVotes(user.id);
-      }
-    }, 1000);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
+    if (user) {
+      loadData();
+      setupSubscriptions();
+    }
   }, [user]);
 
-  const fetchTodayQuestions = () => {
-    const defaultQuestions = [
-      "오늘 가장 함께 점심을 먹고 싶은 사람은?",
-      "세상에서 제일 웃긴 것 같은 사람은?",
-      "힘든 일이 있을 때 기대고 싶은 사람은?",
-      "가장 센스가 좋다고 생각하는 사람은?",
-      "같이 여행을 가고 싶은 사람은?",
-      "가장 열정적이라고 생각하는 사람은?",
-      "함께 프로젝트를 하고 싶은 사람은?"
-    ];
-    
-    const savedQuestions = localStorage.getItem('todayQuestions');
-    if (savedQuestions) {
-      setTodayQuestions(JSON.parse(savedQuestions));
-    } else {
-      setTodayQuestions(defaultQuestions);
-      localStorage.setItem('todayQuestions', JSON.stringify(defaultQuestions));
-    }
-
-    const savedIndex = localStorage.getItem('currentQuestionIndex');
-    if (savedIndex) {
-      setCurrentQuestionIndex(Number(savedIndex));
+  const checkAuthState = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await loadUserProfile();
+      }
+    } catch (error) {
+      console.error('Auth check error:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchMemberCount = () => {
-    const savedUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const woowacourseMembers = savedUsers.filter((user: User) => user.affiliation === '우아한테크코스');
-    setMemberCount(woowacourseMembers.length);
-  };
-
-  const checkTodayVote = (userId: string) => {
-    // 오늘 투표했는지 확인
-    const today = new Date().toDateString();
-    const lastVote = localStorage.getItem(`lastVote_${userId}`);
-    if (lastVote === today) {
-      setHasVotedToday(true);
+  const loadUserProfile = async () => {
+    try {
+      const profile = await getProfile();
+      if (profile) {
+        setUser(profile);
+      }
+    } catch (error) {
+      console.error('Profile load error:', error);
     }
   };
 
-  const checkUnreadVotes = (userId: string) => {
-    // 읽지 않은 투표 수 확인
-    const allVotes = JSON.parse(localStorage.getItem('votes') || '[]');
-    const myVotes = allVotes.filter((vote: any) => vote.candidateId === userId && !vote.read);
-    setUnreadVotes(myVotes.length);
+  const loadData = async () => {
+    try {
+      // 활성 질문 가져오기
+      const question = await getActiveQuestion();
+      setCurrentQuestion(question);
+
+      // 오늘 투표 여부 확인
+      const voted = await hasVotedToday();
+      setHasVoted(voted);
+
+      // 멤버 수 가져오기
+      const profiles = await getAllProfiles();
+      setMemberCount(profiles.length);
+
+      // 읽지 않은 알림 수 가져오기
+      const unreadCount = await getUnreadNotificationCount();
+      setUnreadVotes(unreadCount);
+
+    } catch (error) {
+      console.error('Data load error:', error);
+    }
+  };
+
+  const setupSubscriptions = () => {
+    // 투표 실시간 구독
+    const votesSubscription = subscribeToVotes(() => {
+      loadData(); // 투표가 변경되면 데이터 다시 로드
+    });
+
+    // 알림 실시간 구독
+    const notificationsSubscription = subscribeToNotifications(() => {
+      if (user) {
+        getUnreadNotificationCount().then(setUnreadVotes);
+      }
+    });
+
+    // 프로필 실시간 구독
+    const profilesSubscription = subscribeToProfiles(() => {
+      getAllProfiles().then(profiles => setMemberCount(profiles.length));
+    });
+
+    return () => {
+      votesSubscription.unsubscribe();
+      notificationsSubscription.unsubscribe();
+      profilesSubscription.unsubscribe();
+    };
   };
 
   const handleVote = () => {
@@ -132,37 +151,52 @@ const Index = () => {
     setShowVoteModal(true);
   };
 
-  const handleVoteComplete = () => {
-    setHasVotedToday(true);
-    const today = new Date().toDateString();
-    localStorage.setItem(`lastVote_${user!.id}`, today);
+  const handleVoteComplete = async () => {
+    setHasVoted(true);
+    await loadData(); // 투표 완료 후 데이터 새로고침
     toast({
       title: "투표 완료!",
       description: "익명으로 투표가 전송되었습니다.",
     });
   };
 
-  const handleNextQuestion = () => {
-    const nextIndex = (currentQuestionIndex + 1) % todayQuestions.length;
-    setCurrentQuestionIndex(nextIndex);
-    localStorage.setItem('currentQuestionIndex', nextIndex.toString());
-    
-    // 새로운 질문으로 바뀌면 투표 상태 초기화
-    setHasVotedToday(false);
-    if (user) {
-      localStorage.removeItem(`lastVote_${user.id}`);
+  const handleLoginSuccess = (newUser: User) => {
+    setUser(newUser);
+    toast({
+      title: "로그인 성공!",
+      description: `안녕하세요, ${newUser.nickname}님!`,
+    });
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      setUser(null);
+      setHasVoted(false);
+      setUnreadVotes(0);
+      toast({
+        title: "로그아웃 완료",
+        description: "안전하게 로그아웃되었습니다.",
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
     }
   };
 
-  const handleLoginSuccess = (newUser: User) => {
-    setUser(newUser);
-    // 로그인 후 멤버 수 즉시 업데이트
-    fetchMemberCount();
-    checkUnreadVotes(newUser.id);
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 bg-gradient-to-r from-pink-500 to-red-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <span className="text-white font-bold text-sm">W</span>
+          </div>
+          <p className="text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const isAdmin = user?.email === 'admin@woowacourse.io';
-  const currentQuestion = todayQuestions[currentQuestionIndex] || "질문을 불러오는 중...";
+  const isAdmin = user?.isAdmin || user?.email === 'admin@woowacourse.io';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 to-blue-50">
@@ -208,12 +242,7 @@ const Index = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    localStorage.removeItem('user');
-                    setUser(null);
-                    setHasVotedToday(false);
-                    setUnreadVotes(0);
-                  }}
+                  onClick={handleLogout}
                 >
                   로그아웃
                 </Button>
@@ -249,12 +278,6 @@ const Index = () => {
 
         {/* Today's Question Card */}
         <Card className="shadow-lg border-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white relative overflow-hidden">
-          <div className="absolute top-4 right-4">
-            <Badge className="bg-white/20 text-white border-white/30">
-              {currentQuestionIndex + 1}/{todayQuestions.length}
-            </Badge>
-          </div>
-          
           <CardHeader className="pb-3 pt-6">
             <div className="text-center space-y-2">
               <p className="text-sm text-white/80">우아한테크코스</p>
@@ -272,11 +295,11 @@ const Index = () => {
                 <span className="text-2xl">🤔</span>
               </div>
               <p className="text-white font-medium text-lg leading-relaxed">
-                {currentQuestion}
+                {currentQuestion?.content || "질문을 불러오는 중..."}
               </p>
             </div>
             
-            {hasVotedToday ? (
+            {hasVoted ? (
               <div className="flex items-center justify-center space-x-2 bg-white/20 rounded-2xl p-4">
                 <Heart className="h-4 w-4 text-pink-200" />
                 <span className="text-sm text-white/90">오늘 투표를 완료했습니다</span>
@@ -286,23 +309,12 @@ const Index = () => {
                 onClick={handleVote}
                 className="w-full bg-white text-purple-600 hover:bg-white/90 font-bold py-3 rounded-2xl"
                 size="lg"
+                disabled={!currentQuestion}
               >
                 <Vote className="h-4 w-4 mr-2" />
                 투표하기
               </Button>
             )}
-
-            {/* Question Navigation */}
-            <div className="flex justify-center">
-              <Button
-                variant="ghost"
-                onClick={handleNextQuestion}
-                className="text-white/80 hover:text-white hover:bg-white/10"
-                size="sm"
-              >
-                다음 질문 보기 →
-              </Button>
-            </div>
           </CardContent>
         </Card>
 
@@ -345,8 +357,8 @@ const Index = () => {
               <Badge variant="secondary">진행중</Badge>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">총 질문 수</span>
-              <Badge variant="outline">{todayQuestions.length}개</Badge>
+              <span className="text-gray-600">현재 질문</span>
+              <Badge variant="outline">활성</Badge>
             </div>
           </CardContent>
         </Card>
@@ -388,7 +400,8 @@ const Index = () => {
       <VoteModal
         isOpen={showVoteModal}
         onClose={() => setShowVoteModal(false)}
-        question={currentQuestion}
+        question={currentQuestion?.content || ""}
+        questionId={currentQuestion?.id}
         user={user}
         onVoteComplete={handleVoteComplete}
       />

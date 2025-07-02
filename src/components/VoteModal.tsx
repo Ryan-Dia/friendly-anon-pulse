@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Vote, Users, UserCheck } from "lucide-react";
+import { getAllProfiles, createVote } from '@/lib/supabase';
 
 interface User {
   id: string;
@@ -17,11 +17,12 @@ interface VoteModalProps {
   isOpen: boolean;
   onClose: () => void;
   question: string;
+  questionId: string;
   user: User | null;
   onVoteComplete: () => void;
 }
 
-const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }: VoteModalProps) => {
+const VoteModal = ({ isOpen, onClose, question, questionId, user, onVoteComplete }: VoteModalProps) => {
   const [candidates, setCandidates] = useState<User[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
@@ -29,24 +30,28 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }: VoteModa
 
   useEffect(() => {
     if (isOpen && user) {
-      generateCandidates();
+      loadCandidates();
     }
   }, [isOpen, user]);
 
-  const generateCandidates = () => {
-    // 전체 사용자 목록 가져오기
-    const savedUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const allMembers = savedUsers.filter((u: User) => u.affiliation === '우아한테크코스');
-
-    // 현재 사용자 제외
-    const otherMembers = allMembers.filter((member: User) => member.id !== user?.id);
-    
-    // 전체 멤버를 선택지로 제공
-    setCandidates(otherMembers);
+  const loadCandidates = async () => {
+    try {
+      const allProfiles = await getAllProfiles();
+      // 현재 사용자 제외
+      const otherMembers = allProfiles.filter(profile => profile.id !== user?.id);
+      setCandidates(otherMembers);
+    } catch (error) {
+      console.error('Failed to load candidates:', error);
+      toast({
+        title: "오류 발생",
+        description: "후보자 목록을 불러오는데 실패했습니다.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleVote = async () => {
-    if (!selectedCandidate) {
+    if (!selectedCandidate || !questionId) {
       toast({
         title: "선택해주세요",
         description: "투표할 대상을 선택해주세요.",
@@ -58,32 +63,11 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }: VoteModa
     setLoading(true);
 
     try {
-      // 투표 결과 저장
-      const voteData = {
-        voterId: user!.id,
+      await createVote({
         candidateId: selectedCandidate.id,
-        question: question,
-        timestamp: new Date().toISOString(),
-        date: new Date().toDateString()
-      };
-
-      // 로컬스토리지에 투표 기록 저장
-      const votes = JSON.parse(localStorage.getItem('votes') || '[]');
-      votes.push(voteData);
-      localStorage.setItem('votes', JSON.stringify(votes));
-
-      // 알림 데이터 생성 (선택된 후보자에게 알림)
-      const notifications = JSON.parse(localStorage.getItem('notifications') || '[]');
-      const notification = {
-        id: Date.now().toString(),
-        recipientId: selectedCandidate.id,
-        type: 'vote',
-        message: `누군가 당신에게 투표했습니다: "${question}"`,
-        read: false,
-        timestamp: new Date().toISOString()
-      };
-      notifications.push(notification);
-      localStorage.setItem('notifications', JSON.stringify(notifications));
+        questionId: questionId,
+        questionContent: question
+      });
 
       onVoteComplete();
       onClose();
@@ -92,10 +76,10 @@ const VoteModal = ({ isOpen, onClose, question, user, onVoteComplete }: VoteModa
         title: "투표 완료!",
         description: `${selectedCandidate.nickname}님에게 익명 투표가 전송되었습니다.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "오류 발생",
-        description: "투표 중 오류가 발생했습니다.",
+        description: error.message || "투표 중 오류가 발생했습니다.",
         variant: "destructive"
       });
     } finally {

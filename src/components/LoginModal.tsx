@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,8 +6,15 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock, User, Building } from "lucide-react";
+import { signIn, signUp, getProfile } from '@/lib/supabase';
 
-const LoginModal = ({ isOpen, onClose, onLogin }) => {
+interface LoginModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onLogin: (user: any) => void;
+}
+
+const LoginModal = ({ isOpen, onClose, onLogin }: LoginModalProps) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -19,60 +25,33 @@ const LoginModal = ({ isOpen, onClose, onLogin }) => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
   };
 
-  const handleLogin = async (e) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // 관리자 계정 확인
-      if (formData.email === 'admin@woowacourse.io' && formData.password === 'admin123!') {
-        const adminUser = {
-          id: 'admin',
-          email: 'admin@woowacourse.io',
-          nickname: '관리자',
-          affiliation: '우아한테크코스',
-          isAdmin: true
-        };
-        localStorage.setItem('user', JSON.stringify(adminUser));
-        onLogin(adminUser);
-        onClose();
-        toast({
-          title: "관리자 로그인 성공!",
-          description: "관리자 페이지에 접근할 수 있습니다.",
-        });
-        return;
-      }
-
-      // 일반 사용자 로그인 로직
-      const savedUsers = JSON.parse(localStorage.getItem('users') || '[]');
-      const user = savedUsers.find(u => u.email === formData.email && u.password === formData.password);
+      await signIn(formData.email, formData.password);
+      const profile = await getProfile();
       
-      if (user) {
-        localStorage.setItem('user', JSON.stringify(user));
-        onLogin(user);
+      if (profile) {
+        onLogin(profile);
         onClose();
         toast({
           title: "로그인 성공!",
-          description: `안녕하세요, ${user.nickname}님!`,
-        });
-      } else {
-        toast({
-          title: "로그인 실패",
-          description: "이메일 또는 비밀번호가 올바르지 않습니다.",
-          variant: "destructive"
+          description: `안녕하세요, ${profile.nickname}님!`,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
-        title: "오류 발생",
-        description: "로그인 중 오류가 발생했습니다.",
+        title: "로그인 실패",
+        description: error.message || "이메일 또는 비밀번호가 올바르지 않습니다.",
         variant: "destructive"
       });
     } finally {
@@ -80,7 +59,7 @@ const LoginModal = ({ isOpen, onClose, onLogin }) => {
     }
   };
 
-  const handleSignUp = async (e) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
@@ -94,42 +73,21 @@ const LoginModal = ({ isOpen, onClose, onLogin }) => {
         return;
       }
 
-      const savedUsers = JSON.parse(localStorage.getItem('users') || '[]');
-      
-      // 이메일 중복 체크
-      if (savedUsers.find(u => u.email === formData.email)) {
-        toast({
-          title: "회원가입 실패",
-          description: "이미 존재하는 이메일입니다.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const newUser = {
-        id: Date.now().toString(),
-        email: formData.email,
-        password: formData.password,
-        nickname: formData.nickname,
-        affiliation: formData.affiliation,
-        createdAt: new Date().toISOString()
-      };
-
-      savedUsers.push(newUser);
-      localStorage.setItem('users', JSON.stringify(savedUsers));
-      localStorage.setItem('user', JSON.stringify(newUser));
-      
-      onLogin(newUser);
-      onClose();
+      await signUp(formData.email, formData.password, formData.nickname);
       
       toast({
         title: "회원가입 성공!",
-        description: `환영합니다, ${newUser.nickname}님!`,
+        description: "이메일을 확인하여 계정을 활성화해주세요.",
       });
-    } catch (error) {
+      
+      // 회원가입 후 로그인 탭으로 전환
+      setIsSignUp(false);
+      setFormData({ ...formData, password: '' });
+      
+    } catch (error: any) {
       toast({
-        title: "오류 발생",
-        description: "회원가입 중 오류가 발생했습니다.",
+        title: "회원가입 실패",
+        description: error.message || "회원가입 중 오류가 발생했습니다.",
         variant: "destructive"
       });
     } finally {
