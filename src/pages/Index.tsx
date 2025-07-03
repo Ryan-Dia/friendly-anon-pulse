@@ -10,6 +10,7 @@ import AdminModal from "@/components/AdminModal";
 import MyPage from "@/components/MyPage";
 import ParticipantsModal from "@/components/ParticipantsModal";
 import BoardModal from "@/components/BoardModal";
+import QuestionCarousel from "@/components/QuestionCarousel";
 import { 
   getProfile, 
   getAllProfiles, 
@@ -410,65 +411,13 @@ const Index = () => {
           </Badge>
         </div>
 
-        {/* Today's Question Card */}
-        <Card className="shadow-lg border-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white relative overflow-hidden">
-          <CardHeader className="pb-3 pt-6">
-            <div className="text-center space-y-2">
-              <p className="text-sm text-white/80">우아한테크코스</p>
-              <p className="text-xs text-white/70">2025년 크루들로부터</p>
-            </div>
-            <CardTitle className="text-lg flex items-center justify-center">
-              <Vote className="h-5 w-5 mr-2" />
-              오늘의 질문
-            </CardTitle>
-          </CardHeader>
-          
-          <CardContent className="space-y-6 pb-8">
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 bg-white/20 rounded-full mx-auto flex items-center justify-center">
-                <span className="text-2xl">🤔</span>
-              </div>
-              
-              {questionLoading ? (
-                <p className="text-white/80 text-lg">질문을 불러오는 중...</p>
-              ) : currentQuestion ? (
-                <p className="text-white font-medium text-lg leading-relaxed">
-                  {currentQuestion.content}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-white/80 text-lg">질문을 불러올 수 없습니다</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRefreshQuestion}
-                    className="bg-white/20 border-white/30 text-white hover:bg-white/30"
-                    disabled={questionLoading}
-                  >
-                    {questionLoading ? "로딩중..." : "다시 시도"}
-                  </Button>
-                </div>
-              )}
-            </div>
-            
-            {hasVoted ? (
-              <div className="flex items-center justify-center space-x-2 bg-white/20 rounded-2xl p-4">
-                <Heart className="h-4 w-4 text-pink-200" />
-                <span className="text-sm text-white/90">오늘 투표를 완료했습니다</span>
-              </div>
-            ) : (
-              <Button
-                onClick={handleVote}
-                className="w-full bg-white text-purple-600 hover:bg-white/90 font-bold py-3 rounded-2xl"
-                size="lg"
-                disabled={!currentQuestion || questionLoading}
-              >
-                <Vote className="h-4 w-4 mr-2" />
-                투표하기
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+        {/* Question Carousel */}
+        <QuestionCarousel
+          hasVoted={hasVoted}
+          onVote={handleVote}
+          questionLoading={questionLoading}
+          onRefreshQuestion={handleRefreshQuestion}
+        />
 
         {/* Features Grid */}
         <div className="grid grid-cols-2 gap-4">

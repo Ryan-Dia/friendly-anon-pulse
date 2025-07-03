@@ -227,16 +227,48 @@ export const getActiveQuestion = async () => {
   throw new Error('No questions found in database');
 };
 
-export const updateQuestion = async (id: string, content: string) => {
+export const updateQuestion = async (id: string, content: string, orderIndex?: number) => {
+  const updateData: any = { content };
+  if (orderIndex !== undefined) {
+    updateData.order_index = orderIndex;
+  }
+
   const { data, error } = await supabase
     .from('questions')
-    .update({ content })
+    .update(updateData)
     .eq('id', id)
     .select()
     .single();
 
   if (error) throw error;
   return data;
+};
+
+export const createQuestion = async (questionData: {
+  content: string;
+  order_index: number;
+}) => {
+  const { data, error } = await supabase
+    .from('questions')
+    .insert({
+      content: questionData.content,
+      order_index: questionData.order_index,
+      is_active: false
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const deleteQuestion = async (id: string) => {
+  const { error } = await supabase
+    .from('questions')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
 };
 
 export const setActiveQuestion = async (id: string) => {
@@ -323,6 +355,12 @@ export const createVote = async (voteData: {
   const profile = await getProfile();
   if (!profile) throw new Error('User not authenticated');
 
+  console.log('Creating vote:', {
+    voter: profile.nickname,
+    candidate: voteData.candidateId,
+    question: voteData.questionContent
+  });
+
   const { data, error } = await supabase
     .from('votes')
     .insert({
@@ -334,14 +372,25 @@ export const createVote = async (voteData: {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('Vote creation error:', error);
+    throw error;
+  }
+
+  console.log('Vote created successfully:', data);
 
   // 알림 생성
-  await createNotification({
-    recipientId: voteData.candidateId,
-    type: 'vote',
-    message: `누군가 당신에게 투표했습니다: "${voteData.questionContent}"`
-  });
+  try {
+    await createNotification({
+      recipientId: voteData.candidateId,
+      type: 'vote',
+      message: `누군가 당신에게 투표했습니다: "${voteData.questionContent}"`
+    });
+    console.log('Notification created for vote');
+  } catch (notificationError) {
+    console.error('Failed to create notification:', notificationError);
+    // 알림 생성 실패해도 투표는 성공으로 처리
+  }
 
   return data;
 };
@@ -397,6 +446,8 @@ export const createNotification = async (notificationData: {
   message: string;
   metadata?: any;
 }) => {
+  console.log('Creating notification:', notificationData);
+
   const { data, error } = await supabase
     .from('notifications')
     .insert({
@@ -408,7 +459,12 @@ export const createNotification = async (notificationData: {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('Notification creation error:', error);
+    throw error;
+  }
+
+  console.log('Notification created successfully:', data);
   return data;
 };
 

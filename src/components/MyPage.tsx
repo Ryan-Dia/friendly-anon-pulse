@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { User, Heart, Vote, Calendar, Bell } from "lucide-react";
+import { getNotifications, markAllNotificationsAsRead } from '@/lib/supabase';
 
 interface User {
   id: string;
@@ -13,13 +13,13 @@ interface User {
   affiliation: string;
 }
 
-interface VoteReceived {
+interface Notification {
   id: string;
-  question: string;
-  timestamp: string;
-  date: string;
-  read: boolean;
-  count?: number;
+  type: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+  metadata: any;
 }
 
 interface MyPageProps {
@@ -29,69 +29,49 @@ interface MyPageProps {
 }
 
 const MyPage = ({ isOpen, onClose, user }: MyPageProps) => {
-  const [votesReceived, setVotesReceived] = useState<VoteReceived[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen && user) {
-      loadVotesReceived();
+      loadNotifications();
     }
   }, [isOpen, user]);
 
-  const loadVotesReceived = () => {
+  const loadNotifications = async () => {
     if (!user) return;
 
-    // 내가 받은 투표들 불러오기
-    const allVotes = JSON.parse(localStorage.getItem('votes') || '[]');
-    const myVotes = allVotes.filter((vote: any) => vote.candidateId === user.id);
-    
-    // 투표 기록을 날짜별로 그룹화하고 정리
-    const votesMap = new Map();
-    
-    myVotes.forEach((vote: any) => {
-      const key = `${vote.question}-${vote.date}`;
-      if (!votesMap.has(key)) {
-        votesMap.set(key, {
-          id: vote.timestamp,
-          question: vote.question,
-          timestamp: vote.timestamp,
-          date: vote.date,
-          count: 1,
-          read: vote.read || false
-        });
-      } else {
-        const existing = votesMap.get(key);
-        existing.count += 1;
-      }
-    });
-
-    const votes = Array.from(votesMap.values())
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    
-    setVotesReceived(votes);
-    
-    // 읽지 않은 투표 수 계산
-    const unread = votes.filter(vote => !vote.read).length;
-    setUnreadCount(unread);
+    try {
+      setLoading(true);
+      console.log('Loading notifications for user:', user.nickname);
+      
+      const notificationsData = await getNotifications();
+      console.log('Notifications loaded:', notificationsData.length);
+      
+      setNotifications(notificationsData);
+    } catch (error) {
+      console.error('Failed to load notifications:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const markAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
     if (!user) return;
 
-    // 모든 투표를 읽음으로 표시
-    const allVotes = JSON.parse(localStorage.getItem('votes') || '[]');
-    const updatedVotes = allVotes.map((vote: any) => {
-      if (vote.candidateId === user.id) {
-        return { ...vote, read: true };
-      }
-      return vote;
-    });
-    
-    localStorage.setItem('votes', JSON.stringify(updatedVotes));
-    
-    // 상태 업데이트
-    setVotesReceived(prev => prev.map(vote => ({ ...vote, read: true })));
-    setUnreadCount(0);
+    try {
+      await markAllNotificationsAsRead();
+      
+      // 상태 업데이트
+      setNotifications(prev => prev.map(notification => ({ 
+        ...notification, 
+        is_read: true 
+      })));
+      
+      console.log('All notifications marked as read');
+    } catch (error) {
+      console.error('Failed to mark notifications as read:', error);
+    }
   };
 
   const formatDate = (timestamp: string) => {
@@ -111,6 +91,14 @@ const MyPage = ({ isOpen, onClose, user }: MyPageProps) => {
         minute: '2-digit'
       });
     }
+  };
+
+  const getVoteNotifications = () => {
+    return notifications.filter(notification => notification.type === 'vote');
+  };
+
+  const getUnreadCount = () => {
+    return notifications.filter(notification => !notification.is_read).length;
   };
 
   if (!user) return null;
@@ -146,7 +134,7 @@ const MyPage = ({ isOpen, onClose, user }: MyPageProps) => {
             </CardContent>
           </Card>
 
-          {/* Votes Received Section */}
+          {/* Notifications Section */}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -155,16 +143,16 @@ const MyPage = ({ isOpen, onClose, user }: MyPageProps) => {
                   받은 투표
                 </CardTitle>
                 <div className="flex items-center space-x-2">
-                  {unreadCount > 0 && (
+                  {getUnreadCount() > 0 && (
                     <Badge variant="destructive" className="text-xs">
-                      {unreadCount}개 신규
+                      {getUnreadCount()}개 신규
                     </Badge>
                   )}
-                  {unreadCount > 0 && (
+                  {getUnreadCount() > 0 && (
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={markAllAsRead}
+                      onClick={handleMarkAllAsRead}
                       className="text-xs"
                     >
                       모두 읽음
@@ -174,23 +162,28 @@ const MyPage = ({ isOpen, onClose, user }: MyPageProps) => {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {votesReceived.length > 0 ? (
+              {loading ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-500">알림을 불러오는 중...</p>
+                </div>
+              ) : getVoteNotifications().length > 0 ? (
                 <div className="space-y-3">
-                  {votesReceived.map((vote, index) => (
-                    <div key={vote.id}>
+                  {getVoteNotifications().map((notification, index) => (
+                    <div key={notification.id}>
                       <div className={`p-3 rounded-lg border ${
-                        vote.read ? 'bg-gray-50' : 'bg-blue-50 border-blue-200'
+                        notification.is_read ? 'bg-gray-50' : 'bg-blue-50 border-blue-200'
                       }`}>
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center space-x-2 mb-2">
                               <Vote className="h-4 w-4 text-blue-500" />
-                              {!vote.read && (
+                              {!notification.is_read && (
                                 <Bell className="h-3 w-3 text-blue-500" />
                               )}
                             </div>
                             <p className="text-sm font-medium text-gray-900 mb-1">
-                              "{vote.question}"
+                              {notification.message}
                             </p>
                             <p className="text-xs text-gray-600 mb-2">
                               누군가 당신을 선택했습니다! 💝
@@ -198,18 +191,13 @@ const MyPage = ({ isOpen, onClose, user }: MyPageProps) => {
                             <div className="flex items-center space-x-2">
                               <Calendar className="h-3 w-3 text-gray-400" />
                               <span className="text-xs text-gray-500">
-                                {formatDate(vote.timestamp)}
+                                {formatDate(notification.created_at)}
                               </span>
-                              {vote.count && vote.count > 1 && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {vote.count}명이 선택
-                                </Badge>
-                              )}
                             </div>
                           </div>
                         </div>
                       </div>
-                      {index < votesReceived.length - 1 && (
+                      {index < getVoteNotifications().length - 1 && (
                         <Separator className="my-2" />
                       )}
                     </div>
@@ -236,12 +224,12 @@ const MyPage = ({ isOpen, onClose, user }: MyPageProps) => {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">총 받은 투표</span>
                 <Badge variant="outline">
-                  {votesReceived.reduce((sum, vote) => sum + (vote.count || 1), 0)}개
+                  {getVoteNotifications().length}개
                 </Badge>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">참여한 질문</span>
-                <Badge variant="outline">{votesReceived.length}개</Badge>
+                <span className="text-sm text-gray-600">읽지 않은 알림</span>
+                <Badge variant="outline">{getUnreadCount()}개</Badge>
               </div>
             </CardContent>
           </Card>
