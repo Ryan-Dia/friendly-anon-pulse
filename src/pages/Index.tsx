@@ -46,172 +46,184 @@ const Index = () => {
   const [unreadVotes, setUnreadVotes] = useState(0);
   const [loading, setLoading] = useState(true);
   const [questionLoading, setQuestionLoading] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    // 인증 상태 확인
-    checkAuthState();
+    let mounted = true;
     
+    const initializeApp = async () => {
+      try {
+        console.log('Initializing app...');
+        
+        // 1. 먼저 인증 상태 확인
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          if (mounted) {
+            setLoading(false);
+            setAuthChecked(true);
+          }
+          return;
+        }
+
+        console.log('Session check complete:', session?.user?.email || 'No session');
+
+        // 2. 세션이 있으면 프로필 로드
+        if (session?.user && mounted) {
+          console.log('Loading user profile...');
+          try {
+            const profile = await getProfile();
+            if (profile && mounted) {
+              console.log('Profile loaded:', profile.nickname);
+              setUser(profile);
+            }
+          } catch (profileError) {
+            console.error('Profile load error:', profileError);
+            // 프로필 로드 실패해도 계속 진행
+          }
+        }
+
+        // 3. 기본 데이터 로드 (질문, 멤버 수)
+        if (mounted) {
+          await loadBasicData();
+        }
+
+        // 4. 사용자별 데이터 로드
+        if (session?.user && mounted) {
+          await loadUserSpecificData();
+        }
+
+      } catch (error) {
+        console.error('App initialization error:', error);
+        if (mounted) {
+          toast({
+            title: "초기화 오류",
+            description: "앱을 초기화하는 중 오류가 발생했습니다.",
+            variant: "destructive"
+          });
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+          setAuthChecked(true);
+        }
+      }
+    };
+
+    initializeApp();
+
     // 인증 상태 변경 리스너
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
       console.log('Auth state changed:', event, session?.user?.email);
       
       if (event === 'SIGNED_IN' && session) {
         console.log('User signed in, loading profile...');
-        await loadUserProfile();
+        try {
+          const profile = await getProfile();
+          if (profile && mounted) {
+            setUser(profile);
+            await loadUserSpecificData();
+          }
+        } catch (error) {
+          console.error('Profile load error after signin:', error);
+        }
       } else if (event === 'SIGNED_OUT') {
         console.log('User signed out');
-        setUser(null);
-        setHasVoted(false);
-        setUnreadVotes(0);
+        if (mounted) {
+          setUser(null);
+          setHasVoted(false);
+          setUnreadVotes(0);
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      loadData();
-      setupSubscriptions();
-    } else {
-      // 로그인하지 않은 상태에서도 질문 로드
-      loadQuestionData();
-    }
-  }, [user]);
-
-  const checkAuthState = async () => {
+  const loadBasicData = async () => {
     try {
-      console.log('Checking auth state...');
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('Current session:', session?.user?.email);
+      console.log('Loading basic data...');
       
-      if (session?.user) {
-        console.log('Session found, loading user profile...');
-        const profile = await loadUserProfile();
-        if (profile) {
-          await loadQuestionData();
-        }
-      } else {
-        console.log('No session found, loading questions only...');
-        await loadQuestionData();
-      }
-    } catch (error) {
-      console.error('Auth check error:', error);
-      toast({
-        title: "연결 오류",
-        description: "서버에 연결할 수 없습니다. 새로고침해주세요.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadUserProfile = async () => {
-    try {
-      console.log('Loading user profile...');
-      const profile = await getProfile();
-      
-      if (profile) {
-        console.log('Profile loaded:', profile.nickname);
-        setUser(profile);
-        return profile;
-      } else {
-        console.log('No profile found');
-        return null;
-      }
-    } catch (error) {
-      console.error('Profile load error:', error);
-      toast({
-        title: "프로필 로딩 오류",
-        description: "사용자 프로필을 불러오는데 실패했습니다.",
-        variant: "destructive"
-      });
-      return null;
-    }
-  };
-
-  const loadQuestionData = async () => {
-    setQuestionLoading(true);
-    try {
-      console.log('Loading question data...');
-      
-      // 질문 초기화 (빈 테이블인 경우에만 실행됨)
+      // 질문 초기화 및 로드
       await initializeQuestions();
-      
-      // 활성 질문 가져오기
       const question = await getActiveQuestion();
-      console.log('Active question loaded:', question);
       setCurrentQuestion(question);
+      console.log('Question loaded:', question?.content);
 
-      // 멤버 수 가져오기
+      // 멤버 수 로드
       const profiles = await getAllProfiles();
       setMemberCount(profiles.length);
+      console.log('Member count:', profiles.length);
 
     } catch (error) {
-      console.error('Question data load error:', error);
+      console.error('Basic data load error:', error);
       
-      let errorMessage = "질문을 불러오는데 실패했습니다.";
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        errorMessage = "서버에 연결할 수 없습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.";
-      } else if (error instanceof Error) {
-        if (error.message.includes('row-level security policy')) {
-          errorMessage = "질문이 아직 준비되지 않았습니다.";
-        } else {
-          errorMessage = error.message;
+      // 에러 메시지 개선
+      let errorMessage = "기본 데이터를 불러오는데 실패했습니다.";
+      if (error instanceof Error) {
+        if (error.message.includes('Failed to fetch')) {
+          errorMessage = "네트워크 연결을 확인해주세요.";
+        } else if (error.message.includes('row-level security')) {
+          errorMessage = "데이터베이스 권한 문제가 발생했습니다.";
         }
       }
       
       toast({
-        title: "질문 로딩 오류",
+        title: "데이터 로딩 오류",
         description: errorMessage,
         variant: "destructive"
       });
-    } finally {
-      setQuestionLoading(false);
     }
   };
 
-  const loadData = async () => {
+  const loadUserSpecificData = async () => {
     try {
-      // 질문 데이터 로드
-      await loadQuestionData();
-
+      console.log('Loading user-specific data...');
+      
       // 오늘 투표 여부 확인
       const voted = await hasVotedToday();
       setHasVoted(voted);
+      console.log('Has voted today:', voted);
 
-      // 읽지 않은 알림 수 가져오기
+      // 읽지 않은 알림 수
       const unreadCount = await getUnreadNotificationCount();
       setUnreadVotes(unreadCount);
+      console.log('Unread notifications:', unreadCount);
 
     } catch (error) {
-      console.error('Data load error:', error);
-      toast({
-        title: "데이터 로딩 오류",
-        description: "일부 데이터를 불러오는데 실패했습니다.",
-        variant: "destructive"
-      });
+      console.error('User-specific data load error:', error);
+      // 사용자별 데이터 로드 실패는 치명적이지 않으므로 토스트 없이 로그만
     }
   };
 
   const setupSubscriptions = () => {
+    if (!user) return;
+
+    console.log('Setting up subscriptions...');
+    
     // 투표 실시간 구독
     const votesSubscription = subscribeToVotes(() => {
-      loadData(); // 투표가 변경되면 데이터 다시 로드
+      console.log('Votes updated, reloading data...');
+      loadUserSpecificData();
     });
 
     // 알림 실시간 구독
     const notificationsSubscription = subscribeToNotifications(() => {
-      if (user) {
-        getUnreadNotificationCount().then(setUnreadVotes);
-      }
+      console.log('Notifications updated...');
+      getUnreadNotificationCount().then(setUnreadVotes).catch(console.error);
     });
 
     // 프로필 실시간 구독
     const profilesSubscription = subscribeToProfiles(() => {
-      getAllProfiles().then(profiles => setMemberCount(profiles.length));
+      console.log('Profiles updated...');
+      getAllProfiles().then(profiles => setMemberCount(profiles.length)).catch(console.error);
     });
 
     return () => {
@@ -220,6 +232,14 @@ const Index = () => {
       profilesSubscription.unsubscribe();
     };
   };
+
+  // 구독 설정 (사용자가 로그인했을 때만)
+  useEffect(() => {
+    if (user && authChecked) {
+      const cleanup = setupSubscriptions();
+      return cleanup;
+    }
+  }, [user, authChecked]);
 
   const handleVote = () => {
     if (!user) {
@@ -231,16 +251,20 @@ const Index = () => {
 
   const handleVoteComplete = async () => {
     setHasVoted(true);
-    await loadData(); // 투표 완료 후 데이터 새로고침
+    await loadUserSpecificData();
     toast({
       title: "투표 완료!",
       description: "익명으로 투표가 전송되었습니다.",
     });
   };
 
-  const handleLoginSuccess = (newUser: User) => {
+  const handleLoginSuccess = async (newUser: User) => {
     console.log('Login successful for:', newUser.nickname);
     setUser(newUser);
+    
+    // 로그인 후 사용자별 데이터 로드
+    await loadUserSpecificData();
+    
     toast({
       title: "로그인 성공!",
       description: `안녕하세요, ${newUser.nickname}님!`,
@@ -259,25 +283,48 @@ const Index = () => {
       });
     } catch (error) {
       console.error('Logout error:', error);
+      toast({
+        title: "로그아웃 오류",
+        description: "로그아웃 중 오류가 발생했습니다.",
+        variant: "destructive"
+      });
     }
   };
 
   const handleRefreshQuestion = async () => {
-    await loadQuestionData();
-    toast({
-      title: "새로고침 완료",
-      description: "질문을 다시 불러왔습니다.",
-    });
+    setQuestionLoading(true);
+    try {
+      await loadBasicData();
+      toast({
+        title: "새로고침 완료",
+        description: "질문을 다시 불러왔습니다.",
+      });
+    } catch (error) {
+      console.error('Refresh error:', error);
+      toast({
+        title: "새로고침 실패",
+        description: "질문을 새로고침하는데 실패했습니다.",
+        variant: "destructive"
+      });
+    } finally {
+      setQuestionLoading(false);
+    }
   };
 
-  if (loading) {
+  // 로딩 상태 개선
+  if (loading || !authChecked) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 bg-gradient-to-r from-pink-500 to-red-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 bg-gradient-to-r from-pink-500 to-red-500 rounded-lg flex items-center justify-center mx-auto animate-pulse">
             <span className="text-white font-bold text-sm">W</span>
           </div>
-          <p className="text-gray-600">로딩 중...</p>
+          <div className="space-y-2">
+            <p className="text-gray-600">앱을 초기화하는 중...</p>
+            <div className="w-32 h-1 bg-gray-200 rounded-full mx-auto overflow-hidden">
+              <div className="w-full h-full bg-gradient-to-r from-pink-500 to-red-500 rounded-full animate-pulse"></div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -396,8 +443,9 @@ const Index = () => {
                     size="sm"
                     onClick={handleRefreshQuestion}
                     className="bg-white/20 border-white/30 text-white hover:bg-white/30"
+                    disabled={questionLoading}
                   >
-                    다시 시도
+                    {questionLoading ? "로딩중..." : "다시 시도"}
                   </Button>
                 </div>
               )}
